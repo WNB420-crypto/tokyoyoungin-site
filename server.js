@@ -169,7 +169,7 @@ function buildGeo(text, six) {
 }
 function geoFind(t, x) { if (!t || !t.n) return ""; let lo = 0, hi = t.n - 1, at = -1; while (lo <= hi) { const m = (lo + hi) >> 1; if (t.S[m] <= x) { at = m; lo = m + 1; } else hi = m - 1; } return at >= 0 && x <= t.E[at] ? GEO.codes[t.C[at]] : ""; }
 // City and state come from a larger city database, loaded in the background after the country one.
-const CITY = { v4: null, v6: null, places: [] }, CITY_SRC = ["https://cdn.jsdelivr.net/npm/@ip-location-db/dbip-city/", "https://github.com/sapics/ip-location-db/raw/master/dbip-city/"];
+const CITY = { v4: null, v6: null, places: [] }, CITY_SRC = ["https://unpkg.com/@ip-location-db/dbip-city/", "https://github.com/sapics/ip-location-db/releases/download/latest/", "https://cdn.jsdelivr.net/npm/@ip-location-db/dbip-city/"];
 function csvLine(line) {
   if (!line.includes('"')) return line.split(",");
   const out = []; let cur = "", q = false;
@@ -205,7 +205,7 @@ async function loadCity() {
       if (fresh && CITY[key]) continue;
       if (!fresh) {
         let ok = false, why = "";
-        for (const src of CITY_SRC) { try { const r = await fetch(src + file); if (!r.ok) { why = "download " + r.status; continue; } await Bun.write(f + ".part", r); if (fs.statSync(f + ".part").size < 1e6) { why = "download looks incomplete"; continue; } fs.renameSync(f + ".part", f); ok = true; break; } catch (e) { why = e.message; } }
+        for (const src of CITY_SRC) { try { const r = await fetch(src + file); if (!r.ok) { why += " " + new URL(src).host + ":" + r.status; continue; } await Bun.write(f + ".part", r); if (fs.statSync(f + ".part").size < 1e6) { why = "download looks incomplete"; continue; } fs.renameSync(f + ".part", f); ok = true; break; } catch (e) { why = e.message; } }
         if (!ok && !fs.existsSync(f)) throw new Error(why);
       }
       CITY[key] = await buildCity(f, six, idx); console.log("city lookup ready (" + key + ", " + CITY[key].n + " ranges, " + CITY.places.length + " places)");
