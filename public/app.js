@@ -285,6 +285,21 @@ function chart(vals,color,fmt){
   return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Bar chart, highest bar ${fmt(max)}"><g filter="url(#wob)"><path d="M4 ${H-bot+1} Q160 ${H-bot+4} 316 ${H-bot}" stroke="#141414" stroke-width="2.5" fill="none"/><path d="M4 ${top} H316" stroke="#bbb" stroke-dasharray="5 5" fill="none"/>${bars}</g>
    <text x="6" y="12">top: ${fmt(max)}${range===90?" a week":" a day"}</text><text x="6" y="${H-5}">${range} days ago</text><text x="314" y="${H-5}" text-anchor="end">today</text></svg>`;
 }
+const WORLD={"North America & Caribbean":"US CA MX GL BM PM AG AI AW BS BB BZ BQ VG KY CR CU CW DM DO SV GD GP GT HT HN JM MQ MS NI PA PR BL KN LC MF VC SX TT TC VI","South America":"AR BO BR CL CO EC FK GF GY PY PE SR UY VE","Europe":"AL AD AT BY BE BA BG HR CZ DK EE FO FI FR DE GI GR GG HU IS IE IM IT JE XK LV LI LT LU MT MD MC ME NL MK NO PL PT RO RU SM RS SK SI ES SE CH UA GB VA AX SJ","Africa":"DZ AO BJ BW BF BI CV CM CF TD KM CG CD CI DJ EG GQ ER SZ ET GA GM GH GN GW KE LS LR LY MG MW ML MR MU YT MA MZ NA NE NG RE RW SH ST SN SC SL SO ZA SS SD TZ TG TN UG EH ZM ZW","Asia & Middle East":"AF AM AZ BH BD BT BN KH CN CY GE HK IN ID IR IQ IL JP JO KZ KW KG LA LB MO MY MV MN MM NP KP OM PK PS PH QA SA SG KR LK SY TW TJ TH TL TR TM AE UZ VN YE","Oceania":"AS AU CK FJ PF GU KI MH FM NR NC NZ NU NF MP PW PG PN WS SB TK TO TV UM VU WF"};
+const partOf=c=>{for(const [k,v] of Object.entries(WORLD))if(v.split(" ").includes(c))return k;return c?"Somewhere else":"Not known"};
+let regionNames=null;try{regionNames=new Intl.DisplayNames(["en"],{type:"region"})}catch(e){}
+const countryName=c=>{if(!c)return "Not known";try{return (regionNames&&regionNames.of(c))||c}catch(e){return c}};
+function studioPlaces(){
+  const days=new Set(ST.days.slice(-(range===90?91:range))), by={}, parts={};let total=0;
+  (ST.places||[]).forEach(r=>{if(!days.has(r.day))return;by[r.c]=(by[r.c]||0)+r.n;const p=partOf(r.c);parts[p]=(parts[p]||0)+r.n;total+=r.n});
+  const pct=n=>total?Math.round(100*n/total)+"%":"0%", bar=n=>`<div class="meter" style="height:10px;margin-top:3px"><i style="width:${total?100*n/total:0}%;background:var(--pen)"></i></div>`;
+  const rows=o=>Object.entries(o).sort((a,b)=>b[1]-a[1]);
+  return `<div class="sk stack" style="transform:rotate(1deg)"><h3>Where visitors come from, last ${range} days</h3>
+   ${total?`<div class="tblwrap"><table><tr><th>Part of the world</th><th class="n">Visitors</th><th class="n">Share</th></tr>${rows(parts).map(([k,n])=>`<tr><td>${esc(k)}${bar(n)}</td><td class="n">${num(n)}</td><td class="n">${pct(n)}</td></tr>`).join("")}</table></div>
+   <div class="tblwrap"><table><tr><th>Country</th><th class="n">Visitors</th><th class="n">Share</th></tr>${rows(by).slice(0,15).map(([c,n])=>`<tr><td>${esc(countryName(c))}</td><td class="n">${num(n)}</td><td class="n">${pct(n)}</td></tr>`).join("")}</table></div>
+   ${rows(by).length>15?`<p class="soft">Showing the top 15 of ${rows(by).length} countries.</p>`:""}`:'<p class="soft">No visitors in this window yet.</p>'}
+   <p class="soft">${ST.geoReady?"":"The country lookup is still loading, so new visits show as not known for now. "}Worked out from each visitor's internet address; only the country is saved. Visits from before this was added show as not known. <a href="https://db-ip.com" target="_blank" rel="noopener">IP Geolocation by DB-IP</a></p></div>`;
+}
 function studioNumbers(){
   const since=Date.now()-range*DAY, visits=series(ST.visits), dons=series(ST.dons), sum=a=>a.reduce((x,y)=>x+y,0);
   const by={};ST.donations.filter(d=>d.ts>=since).forEach(d=>{const k=d.post_id||"?";by[k]=by[k]||{amt:0,n:0};by[k].amt+=d.cents;by[k].n++});
@@ -299,6 +314,7 @@ function studioNumbers(){
     <div class="tile sk" style="transform:rotate(-1.5deg)"><span class="soft">Dislikes, all time</span><b>${num(dis)}</b></div></div>
    <p class="note">Dislikes are for your eyes only. They never lower how many people see a post.</p>
    <div class="sk stack" style="transform:rotate(1deg)"><h3>Site traffic</h3><p class="soft">People who visited each day</p>${chart(visits,"#2456d6",num)}</div>
+   ${studioPlaces()}
    <div class="sk stack" style="transform:rotate(-1deg)"><h3>Donations over time</h3>${chart(dons,"#fdb913",money)}</div>
    <div class="sk stack"><h3>Donations by post, last ${range} days</h3><div class="tblwrap"><table><tr><th>Post</th><th class="n">Tips</th><th class="n">Total</th></tr>
     ${Object.entries(by).sort((a,b)=>b[1].amt-a[1].amt).map(([id,o])=>`<tr><td>${esc(name(id))}</td><td class="n">${o.n}</td><td class="n">${money(o.amt)}</td></tr>`).join("")||'<tr><td colspan="3" class="soft">No donations in this window.</td></tr>'}</table></div></div>

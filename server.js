@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS products(id SERIAL PRIMARY KEY, name TEXT, cents INTE
 CREATE TABLE IF NOT EXISTS orders(id SERIAL PRIMARY KEY, session TEXT UNIQUE, user_id INTEGER, email TEXT, items TEXT, cents INTEGER, ship TEXT, ts DOUBLE PRECISION, shipped INTEGER DEFAULT 0);
 CREATE TABLE IF NOT EXISTS coupons(id SERIAL PRIMARY KEY, user_id INTEGER, type TEXT, label TEXT, uses INTEGER);
 CREATE TABLE IF NOT EXISTS visits(day TEXT, vid TEXT, hits INTEGER DEFAULT 0, PRIMARY KEY(day, vid));
+ALTER TABLE visits ADD COLUMN IF NOT EXISTS country TEXT;
 CREATE TABLE IF NOT EXISTS shifts(id TEXT PRIMARY KEY, user_id INTEGER, started DOUBLE PRECISION, done INTEGER DEFAULT 0);
 CREATE TABLE IF NOT EXISTS kv(k TEXT PRIMARY KEY, v TEXT);`;
 const TABLES = { // column lists, used to copy the old SQLite file across once
@@ -137,6 +138,58 @@ async function priceMerch() {
   const r = await all("UPDATE products SET cents=6000 WHERE img IN (" + names.map(() => "?").join(",") + ") RETURNING id", ...names);
   await setkv("price_merch_1", Date.now()); console.log("set " + r.length + " tees to $60");
 }
+
+/* ---------- visitor country ----------
+   Worked out from the visitor's IP address with a country database kept on this server.
+   Only the two-letter country code is saved; the IP address itself is never stored. */
+const GEO = { v4: null, v6: null, codes: [] }, GEO_DIR = path.join(DATA, "geo"), GEO_SRC = "https://cdn.jsdelivr.net/npm/@ip-location-db/dbip-country/";
+const v4num = s => { const p = s.split("."); if (p.length !== 4) return null; let n = 0; for (const x of p) { const v = Number(x); if (!(Number.isInteger(v) && v >= 0 && v <= 255)) return null; n = n * 256 + v; } return n; };
+function v6hi(s) { // the top 64 bits of an IPv6 address
+  const two = s.split("::"); if (two.length > 2) return null;
+  const head = two[0] ? two[0].split(":") : [], tail = two.length === 2 && two[1] ? two[1].split(":") : [];
+  if (two.length === 1 && head.length !== 8) return null; if (head.length + tail.length > 8) return null;
+  const g = [...head, ...Array(8 - head.length - tail.length).fill("0"), ...tail]; let hi = 0n;
+  for (let i = 0; i < 4; i++) { if (!/^[0-9a-f]{1,4}$/i.test(g[i])) return null; hi = (hi << 16n) | BigInt(parseInt(g[i], 16)); }
+  return hi;
+}
+function buildGeo(text, six) {
+  const idx = new Map(GEO.codes.map((c, i) => [c, i])), rows = [];
+  for (const line of text.split("\n")) {
+    const [a, b, c] = line.trim().split(","); if (!c) continue;
+    const s = six ? v6hi(a) : Number(a), e = six ? v6hi(b) : Number(b); if (s === null || e === null || (!six && !(s >= 0 && e >= s))) continue;
+    const code = c.trim().toUpperCase().slice(0, 2); if (!idx.has(code)) { idx.set(code, GEO.codes.length); GEO.codes.push(code); }
+    rows.push([s, e, idx.get(code)]);
+  }
+  rows.sort((x, y) => (x[0] < y[0] ? -1 : x[0] > y[0] ? 1 : 0));
+  const S = six ? new BigUint64Array(rows.length) : new Float64Array(rows.length), E = six ? new BigUint64Array(rows.length) : new Float64Array(rows.length), C = new Uint16Array(rows.length);
+  rows.forEach((r, i) => { S[i] = r[0]; E[i] = r[1]; C[i] = r[2]; });
+  return { S, E, C, n: rows.length };
+}
+function geoFind(t, x) { if (!t || !t.n) return ""; let lo = 0, hi = t.n - 1, at = -1; while (lo <= hi) { const m = (lo + hi) >> 1; if (t.S[m] <= x) { at = m; lo = m + 1; } else hi = m - 1; } return at >= 0 && x <= t.E[at] ? GEO.codes[t.C[at]] : ""; }
+function countryOf(ip) {
+  try {
+    ip = String(ip || "").trim().split("%")[0]; const m = /(\d+\.\d+\.\d+\.\d+)$/.exec(ip);
+    if (m) { const n = v4num(m[1]); return n === null ? "" : geoFind(GEO.v4, n); }
+    const h6 = v6hi(ip); return h6 === null ? "" : geoFind(GEO.v6, h6);
+  } catch (e) { return ""; }
+}
+async function loadGeo() {
+  fs.mkdirSync(GEO_DIR, { recursive: true });
+  for (const [key, file, six] of [["v4", "dbip-country-ipv4-num.csv", false], ["v6", "dbip-country-ipv6.csv", true]]) {
+    try {
+      const f = path.join(GEO_DIR, file), fresh = fs.existsSync(f) && Date.now() - fs.statSync(f).mtimeMs < 35 * DAY;
+      if (fresh && GEO[key]) continue;
+      let text;
+      if (fresh) text = fs.readFileSync(f, "utf8");
+      else { const r = await fetch(GEO_SRC + file); if (!r.ok) throw new Error("download " + r.status); text = await r.text(); if (text.length < 100000) throw new Error("download looks incomplete"); fs.writeFileSync(f, text); }
+      GEO[key] = buildGeo(text, six); console.log("country lookup ready (" + key + ", " + GEO[key].n + " ranges)");
+    } catch (e) {
+      console.error("country lookup " + key + " unavailable:", e.message);
+      try { const f = path.join(GEO_DIR, file); if (!GEO[key] && fs.existsSync(f)) GEO[key] = buildGeo(fs.readFileSync(f, "utf8"), six); } catch (e2) {}
+    }
+  }
+}
+setInterval(() => loadGeo().catch(() => {}), DAY).unref();
 
 /* ---------- rate limit ---------- */
 const hits = new Map();
@@ -254,6 +307,7 @@ async function studio() {
   const dd = {}; dons.forEach(d => { const k = dayOf(d.ts); dd[k] = (dd[k] || 0) + d.cents; });
   return {
     days, visits: days.map(d => v[d] || 0), dons: days.map(d => dd[d] || 0), donations: dons,
+    places: await all("SELECT day, COALESCE(country,'') AS c, COUNT(*)::int AS n FROM visits WHERE day>=? GROUP BY day, country", days[0]), geoReady: !!(GEO.v4 || GEO.v6),
     reports: await all("SELECT r.id, r.post_id, r.reason, r.details, r.ts, p.title FROM reports r LEFT JOIN posts p ON p.id=r.post_id ORDER BY r.ts DESC"),
     subsFree: await all("SELECT email, ts FROM subs_free ORDER BY ts DESC"),
     subsPaid: await all("SELECT email, created AS ts, sub_status FROM users WHERE paid=1 ORDER BY id DESC"),
@@ -489,7 +543,7 @@ async function onStripe(ev) {
 
 /* ---------- server ---------- */
 const server = http.createServer(async (req, res) => {
-  const url = new URL(req.url, "http://x"), ctx = { req, set: [], ip: (req.headers["x-forwarded-for"] || "").split(",")[0].trim() || req.socket.remoteAddress || "?" };
+  const url = new URL(req.url, "http://x"), ctx = { req, set: [], ip: String(req.headers["x-real-ip"] || "").trim() || (req.headers["x-forwarded-for"] || "").split(",")[0].trim() || req.socket.remoteAddress || "?" };
   let p = url.pathname; try { p = decodeURIComponent(p); } catch (e) {}
   const json = (status, body) => send(res, status, body, { "Cache-Control": "no-store", ...(ctx.set.length ? { "Set-Cookie": ctx.set } : {}) });
   try {
@@ -508,7 +562,7 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === "GET" || req.method === "HEAD") {
       if (p === "/" || p === "/index.html") {
-        await run("INSERT INTO visits(day,vid,hits) VALUES(?,?,1) ON CONFLICT(day,vid) DO UPDATE SET hits=visits.hits+1", today(), ctx.vid);
+        await run("INSERT INTO visits(day,vid,hits,country) VALUES(?,?,1,?) ON CONFLICT(day,vid) DO UPDATE SET hits=visits.hits+1, country=COALESCE(visits.country, excluded.country)", today(), ctx.vid, countryOf(ctx.ip) || null);
         return send(res, 200, fs.readFileSync(path.join(PUB, "index.html")), { "Content-Type": STATIC[".html"], "Cache-Control": "no-cache", ...(ctx.set.length ? { "Set-Cookie": ctx.set } : {}) });
       }
       if (p === "/api/state") return json(200, await state(ctx));
@@ -560,5 +614,5 @@ const server = http.createServer(async (req, res) => {
   await seedMerch();
   await priceMerch();
   await renameMerch();
-  server.listen(PORT, () => { console.log("TokyoYoungin site on " + BASE + " · payments " + (KEY ? "on" : "off") + " · Postgres · uploads in " + UP); ensureWebhook(); });
+  server.listen(PORT, () => { console.log("TokyoYoungin site on " + BASE + " · payments " + (KEY ? "on" : "off") + " · Postgres · uploads in " + UP); ensureWebhook(); loadGeo().catch(() => {}); });
 })().catch(e => { console.error("startup failed:", e); process.exit(1); });
