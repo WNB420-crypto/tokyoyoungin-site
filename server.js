@@ -59,10 +59,11 @@ const emailOk = e => typeof e === "string" && e.length < 200 && /^[^\s@]+@[^\s@]
 const str = (v, max) => String(v == null ? "" : v).trim().slice(0, max);
 const validUrl = u => { try { const x = new URL(u); return x.protocol === "https:" || x.protocol === "http:"; } catch (e) { return false; } };
 
-// owner account comes from environment variables
-if (process.env.OWNER_EMAIL && process.env.OWNER_PASSWORD) {
-  const e = process.env.OWNER_EMAIL.trim().toLowerCase();
-  run("INSERT INTO users(email,pass,role,created) VALUES(?,?,'owner',?) ON CONFLICT(email) DO UPDATE SET pass=excluded.pass, role='owner'", e, hashPw(process.env.OWNER_PASSWORD), Date.now());
+// owner accounts come from environment variables (OWNER_* for TokyoYoungin, ADMIN_* for the site manager)
+for (const [ek, pk] of [["OWNER_EMAIL", "OWNER_PASSWORD"], ["ADMIN_EMAIL", "ADMIN_PASSWORD"]]) {
+  if (!process.env[ek] || !process.env[pk]) continue;
+  const e = process.env[ek].trim().toLowerCase();
+  run("INSERT INTO users(email,pass,role,created) VALUES(?,?,'owner',?) ON CONFLICT(email) DO UPDATE SET pass=excluded.pass, role='owner'", e, hashPw(process.env[pk]), Date.now());
 }
 
 /* ---------- rate limit ---------- */
