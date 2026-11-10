@@ -59,11 +59,25 @@ const emailOk = e => typeof e === "string" && e.length < 200 && /^[^\s@]+@[^\s@]
 const str = (v, max) => String(v == null ? "" : v).trim().slice(0, max);
 const validUrl = u => { try { const x = new URL(u); return x.protocol === "https:" || x.protocol === "http:"; } catch (e) { return false; } };
 
-// owner accounts come from environment variables (OWNER_* for TokyoYoungin, ADMIN_* for the site manager)
-for (const [ek, pk] of [["OWNER_EMAIL", "OWNER_PASSWORD"], ["ADMIN_EMAIL", "ADMIN_PASSWORD"]]) {
-  if (!process.env[ek] || !process.env[pk]) continue;
-  const e = process.env[ek].trim().toLowerCase();
-  run("INSERT INTO users(email,pass,role,created) VALUES(?,?,'owner',?) ON CONFLICT(email) DO UPDATE SET pass=excluded.pass, role='owner'", e, hashPw(process.env[pk]), Date.now());
+// Owner logins start from environment variables (OWNER_* for TokyoYoungin, ADMIN_* for the site manager).
+// Each must be changed at first login. After that the person's own choice wins, until the variable is
+// edited in Railway, which resets that login to the new starter values.
+{
+  const cols = all("PRAGMA table_info(users)").map(c => c.name);
+  if (!cols.includes("slot")) db.exec("ALTER TABLE users ADD COLUMN slot TEXT");
+  if (!cols.includes("must_change")) db.exec("ALTER TABLE users ADD COLUMN must_change INTEGER DEFAULT 0");
+  for (const [slot, ek, pk] of [["owner", "OWNER_EMAIL", "OWNER_PASSWORD"], ["admin", "ADMIN_EMAIL", "ADMIN_PASSWORD"]]) {
+    if (!process.env[ek] || !process.env[pk]) continue;
+    const e = process.env[ek].trim().toLowerCase(), tag = sha(e + "\n" + process.env[pk]);
+    const u = one("SELECT * FROM users WHERE slot=?", slot) || one("SELECT * FROM users WHERE email=? AND role='owner'", e);
+    if (u && kv("boot_" + slot) === tag) { if (!u.slot) run("UPDATE users SET slot=? WHERE id=?", slot, u.id); continue; }
+    if (u) {
+      if (one("SELECT id FROM users WHERE email=? AND id<>?", e, u.id)) { console.error("starter login for " + slot + " clashes with another account"); continue; }
+      run("UPDATE users SET email=?, pass=?, role='owner', slot=?, must_change=1 WHERE id=?", e, hashPw(process.env[pk]), slot, u.id);
+      run("DELETE FROM sessions WHERE user_id=?", u.id);
+    } else run("INSERT INTO users(email,pass,role,created,slot,must_change) VALUES(?,?,'owner',?,?,1) ON CONFLICT(email) DO UPDATE SET pass=excluded.pass, role='owner', slot=excluded.slot, must_change=1", e, hashPw(process.env[pk]), Date.now(), slot);
+    setkv("boot_" + slot, tag);
+  }
 }
 
 /* ---------- rate limit ---------- */
@@ -147,7 +161,7 @@ function serveFile(req, res, file, type, cache) {
 function meOf(u) {
   if (!u) return null;
   const d = dayState(u);
-  return { email: u.email, owner: u.role === "owner", paid: isMember(u), subStatus: u.sub_status || "", subHalf: !!u.sub_half, pts: u.pts, intel: u.intel, day: d, coupons: all("SELECT id,type,label,uses FROM coupons WHERE user_id=? AND uses>0", u.id) };
+  return { email: u.email, owner: u.role === "owner", mustChange: !!u.must_change, paid: isMember(u), subStatus: u.sub_status || "", subHalf: !!u.sub_half, pts: u.pts, intel: u.intel, day: d, coupons: all("SELECT id,type,label,uses FROM coupons WHERE user_id=? AND uses>0", u.id) };
 }
 function state(ctx) {
   const u = ctx.user;
@@ -211,6 +225,17 @@ const act = {
     if (!u || !checkPw(String(b.password || ""), u.pass)) throw new Err(401, "Wrong email or password.");
     login(ctx, u.id); return { ok: true };
   },
+  async setLogin(ctx, b) {
+    limit(ctx.ip, "auth", 8);
+    const u = needUser(ctx); if (u.role !== "owner") throw new Err(403, "Owner only.");
+    const name = str(b.name, 60).toLowerCase(), pw = String(b.password || "");
+    if (!/^\S{3,60}$/.test(name)) throw new Err(400, "Pick a username or email with 3 to 60 characters and no spaces.");
+    if (pw.length < 8) throw new Err(400, "Use a password with at least 8 characters.");
+    if (u.must_change && checkPw(pw, u.pass)) throw new Err(400, "Pick a new password, not the starter one.");
+    if (one("SELECT id FROM users WHERE email=? AND id<>?", name, u.id)) throw new Err(409, "That username is taken. Pick another.");
+    run("UPDATE users SET email=?, pass=?, must_change=0 WHERE id=?", name, hashPw(pw), u.id);
+    run("DELETE FROM sessions WHERE user_id=?", u.id); login(ctx, u.id); return { ok: true };
+  },
   async logout(ctx) { const t = cookies(ctx.req).sid; if (t) run("DELETE FROM sessions WHERE th=?", sha(t)); ctx.set.push(cookie("sid", "", 0)); return { ok: true }; },
   async free(ctx, b) {
     limit(ctx.ip, "free", 5);
@@ -250,7 +275,7 @@ const act = {
     if (!(cents >= 100 && cents <= 50000)) throw new Err(400, "Pick an amount between $1 and $500.");
     const p = id === "live" ? { id: "live", title: "the live stream" } : one("SELECT id,title FROM posts WHERE id=?", id);
     if (!p) throw new Err(400, "That post isn't available.");
-    const s = await stripe("checkout/sessions", { mode: "payment", submit_type: "donate", success_url: BASE + "/?done=tip", cancel_url: BASE + "/", customer_email: ctx.user ? ctx.user.email : undefined,
+    const s = await stripe("checkout/sessions", { mode: "payment", submit_type: "donate", success_url: BASE + "/?done=tip", cancel_url: BASE + "/", customer_email: ctx.user && emailOk(ctx.user.email) ? ctx.user.email : undefined,
       line_items: [{ quantity: 1, price_data: { currency: "usd", unit_amount: cents, product_data: { name: "Tip for TokyoYoungin", description: str(p.title, 120) } } }],
       metadata: { kind: "tip", post_id: p.id, name: str(b.name, 40), user_id: ctx.user ? ctx.user.id : "" } });
     return { url: s.url };
@@ -259,7 +284,7 @@ const act = {
     limit(ctx.ip, "pay", 10);
     const u = needUser(ctx); if (u.paid) throw new Err(400, "You are already a member.");
     const s = await stripe("checkout/sessions", { mode: "subscription", success_url: BASE + "/?done=member", cancel_url: BASE + "/#join", client_reference_id: u.id,
-      ...(u.customer ? { customer: u.customer } : { customer_email: u.email }),
+      ...(u.customer ? { customer: u.customer } : emailOk(u.email) ? { customer_email: u.email } : {}),
       line_items: [{ quantity: 1, price_data: { currency: "usd", unit_amount: PRICE, recurring: { interval: "month" }, product_data: { name: "TokyoYoungin membership" } } }],
       metadata: { kind: "sub", user_id: u.id }, subscription_data: { metadata: { user_id: u.id } } });
     return { url: s.url };
@@ -290,7 +315,7 @@ const act = {
       if (c.type === "ship") ship = 0;
       if (c.type === "shirt") { if (!shirtMax) throw new Err(400, "Add a shirt to the cart to use the free shirt."); off = shirtMax; }
     }
-    const params = { mode: "payment", success_url: BASE + "/?done=order", cancel_url: BASE + "/#merch", customer_email: u ? u.email : undefined, line_items: lines,
+    const params = { mode: "payment", success_url: BASE + "/?done=order", cancel_url: BASE + "/#merch", customer_email: u && emailOk(u.email) ? u.email : undefined, line_items: lines,
       shipping_address_collection: { allowed_countries: ["US"] },
       shipping_options: [{ shipping_rate_data: { type: "fixed_amount", display_name: ship ? "Shipping" : "Free shipping", fixed_amount: { amount: ship, currency: "usd" } } }],
       metadata: { kind: "order", user_id: u ? u.id : "", coupon: c ? c.id : "", items: JSON.stringify(meta).slice(0, 490) } };
@@ -415,7 +440,8 @@ const server = http.createServer(async (req, res) => {
     ctx.vid = /^[a-f0-9]{32}$/.test(ck.vid || "") ? ck.vid : null;
     if (!ctx.vid) { ctx.vid = rid(16); ctx.set.push(cookie("vid", ctx.vid, 60 * 60 * 24 * 400)); }
     if (ck.sid) { const s = one("SELECT user_id FROM sessions WHERE th=?", sha(ck.sid)); if (s) ctx.user = one("SELECT * FROM users WHERE id=?", s.user_id); }
-    const owner = !!ctx.user && ctx.user.role === "owner";
+    const isOwner = !!ctx.user && ctx.user.role === "owner", owner = isOwner && !ctx.user.must_change;
+    const ownerOnly = () => { throw new Err(403, isOwner ? "Set your own username and password first." : "Owner only."); };
 
     if (req.method === "GET" || req.method === "HEAD") {
       if (p === "/" || p === "/index.html") {
@@ -424,7 +450,7 @@ const server = http.createServer(async (req, res) => {
       }
       if (p === "/api/state") return json(200, state(ctx));
       if (p === "/api/chat") { const after = Number(url.searchParams.get("after")) || 0; return json(200, { live: kv("live") || { on: false }, msgs: chat.filter(m => m.id > after), ids: chat.map(m => m.id) }); }
-      if (p === "/api/owner/data") { if (!owner) throw new Err(403, "Owner only."); return json(200, studio()); }
+      if (p === "/api/owner/data") { if (!owner) ownerOnly(); return json(200, studio()); }
       if (p.startsWith("/go/")) { const a = one("SELECT * FROM ads WHERE id=?", Number(p.slice(4)) || 0); if (!a) return send(res, 404, "Not found"); run("UPDATE ads SET clicks=clicks+1 WHERE id=?", a.id); res.writeHead(302, { Location: a.url, "Cache-Control": "no-store" }); return res.end(); }
       if (p.startsWith("/media/")) {
         const f = p.slice(7); if (!/^[a-f0-9]{24}\.[a-z0-9]{2,5}$/.test(f)) return send(res, 404, "Not found");
@@ -437,7 +463,7 @@ const server = http.createServer(async (req, res) => {
     // writes: same-origin only
     const origin = req.headers.origin; if (origin && new URL(origin).host !== req.headers.host) throw new Err(403, "Blocked.");
     if (req.method === "PUT" && p === "/api/owner/upload") {
-      if (!owner) throw new Err(403, "Owner only.");
+      if (!owner) ownerOnly();
       const ext = String(url.searchParams.get("ext") || "").toLowerCase(); if (!EXT[ext]) throw new Err(400, "That file type isn't supported. Use MP4, MOV, WEBM, JPG, PNG, WEBP or GIF.");
       const name = rid(12) + "." + ext, dest = path.join(UP, name), ws = fs.createWriteStream(dest); let n = 0, dead = false;
       await new Promise((ok, bad) => { req.on("data", c => { n += c.length; if (n > 2.5e9 && !dead) { dead = true; req.destroy(); ws.destroy(); fs.unlink(dest, () => {}); bad(new Err(413, "That file is larger than 2.5 GB.")); } }); req.pipe(ws); ws.on("finish", ok); ws.on("error", bad); req.on("error", bad); });
@@ -445,7 +471,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === "POST" && p.startsWith("/api/")) {
       const body = JSON.parse((await readBody(req)) || "{}"), parts = p.split("/");
-      if (parts[2] === "owner") { if (!owner) throw new Err(403, "Owner only."); const fn = own[parts[3]]; if (!fn) throw new Err(404, "Not found"); return json(200, await fn(ctx, body)); }
+      if (parts[2] === "owner") { if (!owner) ownerOnly(); const fn = own[parts[3]]; if (!fn) throw new Err(404, "Not found"); return json(200, await fn(ctx, body)); }
       const fn = act[parts[2]]; if (!fn) throw new Err(404, "Not found");
       return json(200, await fn(ctx, body));
     }

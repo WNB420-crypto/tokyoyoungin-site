@@ -374,14 +374,23 @@ function studioPoints(){
 function studioLinks(){
   return `<div class="sk stack" style="transform:rotate(-1deg)"><h2>Social links</h2><p class="soft">These show as buttons on the profile.</p>
    ${["YouTube","Instagram","TikTok","Facebook"].map(k=>`<div><label for="soc${k}">${k}</label><input type="url" id="soc${k}" value="${esc((S.social||{})[k]||"")}" placeholder="https://"></div>`).join("")}
-   <div><button class="btn" data-a="saveSocial">Save links</button></div></div>`;
+   <div><button class="btn" data-a="saveSocial">Save links</button></div></div>${loginForm(false)}`;
+}
+function loginForm(first){
+  return `<div class="sk stack" style="--bg:#fff3c9;transform:rotate(-1deg)"><h2>${first?"Make this login yours":"Your login"}</h2>
+   <p>${first?"You signed in with a starter login. Pick your own username and password before you go in.":"Change the username or password you sign in with."}</p>
+   <div><label for="nlName">Username or email</label><input type="text" id="nlName" maxlength="60" autocapitalize="none" autocomplete="username" value="${first?"":esc(S.me.email)}"></div>
+   <div><label for="nlPass">New password (8 characters or more)</label><input type="password" id="nlPass" autocomplete="new-password" class="pw"></div>
+   <div><label for="nlPass2">Type the password again</label><input type="password" id="nlPass2" autocomplete="new-password" class="pw"></div>
+   <div><button class="btn" data-a="setLogin">Save my login</button></div></div>`;
 }
 function renderStudio(){
+  if(owner()&&S.me.mustChange)return `<h1 style="transform:rotate(-2deg)">Studio</h1>${loginForm(true)}`;
   if(!owner())return `<h1 style="transform:rotate(-2deg)">Studio</h1><div class="sk stack" style="transform:rotate(1deg)"><h2>Owner login</h2>
     ${me()?`<p>You're signed in as ${esc(S.me.email)}, which is not the owner account.</p><div><button class="btn white sm" data-a="logout">Log out</button></div>`
-    :`<div><label for="auEmail">Email</label><input type="email" id="auEmail" autocomplete="email"></div><div><label for="auPass">Password</label><input type="password" id="auPass" autocomplete="current-password" style="width:100%;background:#fff;border:2.5px solid var(--ink);border-radius:12px 4px 13px 5px/5px 12px 4px 13px;padding:8px 10px;font-size:18px"></div><div><button class="btn" data-a="login">Log in</button></div>`}</div>`;
+    :`<div><label for="auEmail">Username or email</label><input type="text" id="auEmail" autocapitalize="none" autocomplete="username"></div><div><label for="auPass">Password</label><input type="password" id="auPass" autocomplete="current-password" style="width:100%;background:#fff;border:2.5px solid var(--ink);border-radius:12px 4px 13px 5px/5px 12px 4px 13px;padding:8px 10px;font-size:18px"></div><div><button class="btn" data-a="login">Log in</button></div>`}</div>`;
   if(!ST)return `<h1 style="transform:rotate(-2deg)">Studio</h1><p class="soft">Loading your numbers.</p>`;
-  const tabs=[["numbers","Numbers"],["post","Post"],["golive","Go live"],["reports","Reports"],["lists","Lists"],["ads","Ads"],["merch","Merch"],["orders","Orders"],["points","Points"],["links","Links"]];
+  const tabs=[["numbers","Numbers"],["post","Post"],["golive","Go live"],["reports","Reports"],["lists","Lists"],["ads","Ads"],["merch","Merch"],["orders","Orders"],["points","Points"],["links","Links & login"]];
   const toShip=ST.orders.filter(o=>!o.shipped).length;
   const body={numbers:studioNumbers,post:studioPost,golive:studioLive,reports:studioReports,lists:studioLists,ads:studioAds,merch:studioMerch,orders:studioOrders,points:studioPoints,links:studioLinks}[sTab]();
   return `<div class="row" style="justify-content:space-between"><h1 style="transform:rotate(-2deg)">Studio</h1><span class="stamp">Owner only</span></div>
@@ -468,6 +477,10 @@ const A={
  order:async(d,el)=>{el.disabled=true;try{const r=await api("checkout",{items:cart.map(i=>({id:i.id,size:i.size,q:i.q})),coupon:cartCoupon||null});location.href=r.url}catch(e){el.disabled=false;throw e}},
  register:async()=>{await api("register",creds());await refresh();toast("Account made. You're on the free list.")},
  login:async()=>{await api("login",creds());await load();if(tab==="studio")return route();render();toast("You're logged in")},
+ setLogin:async()=>{const name=$("#nlName").value.trim(),pw=$("#nlPass").value;
+   if(name.length<3||/\s/.test(name))return toast("Pick a username with 3 or more characters and no spaces");
+   if(pw.length<8)return toast("Use a password with at least 8 characters");if(pw!==$("#nlPass2").value)return toast("The two passwords don't match");
+   await api("setLogin",{name,password:pw});await load();await route();toast("Saved. Use your new login from now on.")},
  logout:async()=>{await api("logout");ST=null;await load();go("feed");toast("Logged out")},
  joinFree:async()=>{await api("free",{email:$("#freeEmail").value.trim()});await refresh();toast("You're on the free list")},
  joinPaid:async(d,el)=>{if(!me()){toast("Make an account or log in first, then tap Become a member");const e=$("#auEmail");if(e)e.focus();return}
