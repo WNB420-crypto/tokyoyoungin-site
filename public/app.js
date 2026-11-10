@@ -289,22 +289,26 @@ const WORLD={"North America & Caribbean":"US CA MX GL BM PM AG AI AW BS BB BZ BQ
 const partOf=c=>{for(const [k,v] of Object.entries(WORLD))if(v.split(" ").includes(c))return k;return c?"Somewhere else":"Not known"};
 let regionNames=null;try{regionNames=new Intl.DisplayNames(["en"],{type:"region"})}catch(e){}
 const countryName=c=>{if(!c)return "Not known";try{return (regionNames&&regionNames.of(c))||c}catch(e){return c}};
+let plTab="world", plC=null, plR=null, plAll=false; // which compartment is open, and the country / state being looked into
 function studioPlaces(){
-  const days=new Set(ST.days.slice(-(range===90?91:range))), by={}, parts={}, states={}, cities={};let total=0;
-  (ST.places||[]).forEach(r=>{if(!days.has(r.day))return;by[r.c]=(by[r.c]||0)+r.n;const p=partOf(r.c);parts[p]=(parts[p]||0)+r.n;total+=r.n;
-    if(r.r){const k=r.r+"|"+r.c;states[k]=(states[k]||0)+r.n}
-    if(r.t){const k=r.t+"|"+(r.c==="US"&&r.r?r.r:countryName(r.c));cities[k]=(cities[k]||0)+r.n}});
-  const pct=n=>total?Math.round(100*n/total)+"%":"0%", bar=n=>`<div class="meter" style="height:10px;margin-top:3px"><i style="width:${total?100*n/total:0}%;background:var(--pen)"></i></div>`;
-  const rows=o=>Object.entries(o).sort((a,b)=>b[1]-a[1]);
-  const tbl=(head,list,label)=>`<div class="tblwrap"><table><tr><th>${head}</th><th class="n">Visitors</th><th class="n">Share</th></tr>${list.map(([k,n])=>`<tr><td>${label(k)}</td><td class="n">${num(n)}</td><td class="n">${pct(n)}</td></tr>`).join("")}</table></div>`;
-  const more=(o,n,what)=>rows(o).length>n?`<p class="soft">Showing the top ${n} of ${rows(o).length} ${what}.</p>`:"";
-  const two=k=>{const [a,b]=k.split("|");return esc(a)+(b?` <span class="soft">${esc(b)}</span>`:"")};
-  return `<div class="sk stack" style="transform:rotate(1deg)"><h3>Where visitors come from, last ${range} days</h3>
-   ${total?`${tbl("Part of the world",rows(parts),k=>esc(k)+bar(parts[k]))}
-   ${tbl("Country",rows(by).slice(0,15),c=>esc(countryName(c)))}${more(by,15,"countries")}
-   ${rows(states).length?tbl("State or region",rows(states).slice(0,15),k=>{const [a,c]=k.split("|");return esc(a)+(c&&c!=="US"?` <span class="soft">${esc(countryName(c))}</span>`:"")})+more(states,15,"states and regions"):""}
-   ${rows(cities).length?tbl("City",rows(cities).slice(0,20),two)+more(cities,20,"cities"):""}`:'<p class="soft">No visitors in this window yet.</p>'}
-   <p class="soft">${ST.cityReady?"":ST.geoReady?"City and state lookup is still loading, so new visits show a country only for now. ":"The location lookup is still loading, so new visits show as not known for now. "}Worked out from each visitor's internet address, so city is approximate and phone networks can show a nearby city. Only the place is saved, never the address. Visits from before this was added show as not known. <a href="https://db-ip.com" target="_blank" rel="noopener">IP Geolocation by DB-IP</a></p></div>`;
+  const days=new Set(ST.days.slice(-(range===90?91:range))), all=(ST.places||[]).filter(r=>days.has(r.day));
+  const rowsIn=all.filter(r=>(plC===null||r.c===plC)&&(plR===null||r.r===plR)), total=rowsIn.reduce((a,r)=>a+r.n,0);
+  const group=(list,key)=>{const o=new Map();list.forEach(r=>{const k=key(r);if(k===null)return;o.set(k,(o.get(k)||0)+r.n)});return [...o.entries()].sort((a,b)=>b[1]-a[1])};
+  const pct=n=>total?Math.round(100*n/total)+"%":"0%", bar=n=>`<div class="meter" style="height:9px;margin-top:3px"><i style="width:${total?100*n/total:0}%;background:var(--pen)"></i></div>`;
+  const LIM=12, cut=l=>plAll?l:l.slice(0,LIM), more=l=>l.length>LIM?`<div><button class="btn white sm" data-a="plMore">${plAll?"Show fewer":"Show all "+l.length}</button></div>`:"";
+  const table=(head,list,cell)=>list.length?`<div class="tblwrap"><table><tr><th>${head}</th><th class="n">Visitors</th><th class="n">Share</th></tr>${cut(list).map(([k,n])=>`<tr><td>${cell(k)}${bar(n)}</td><td class="n">${num(n)}</td><td class="n">${pct(n)}</td></tr>`).join("")}</table></div>${more(list)}`:'<p class="soft">Nothing to show here for this window.</p>';
+  const tabs=[["world","World"],["countries","Countries"],["states","States"],["cities","Cities"]];
+  let body="";
+  if(plTab==="world")body=table("Part of the world",group(all,r=>partOf(r.c)),k=>esc(k));
+  if(plTab==="countries")body=table("Country",group(all,r=>r.c),c=>`<button class="lnk" data-a="plCountry" data-c="${esc(c)}">${esc(countryName(c))}</button>`)+'<p class="soft">Tap a country to see its states.</p>';
+  if(plTab==="states")body=table(plC==="US"?"State":"State or region",group(rowsIn,r=>r.r?r.c+"|"+r.r:null),k=>{const [c,r]=k.split("|");return `<button class="lnk" data-a="plState" data-c="${esc(c)}" data-r="${esc(r)}">${esc(r)}</button>${plC===null?` <span class="soft">${esc(countryName(c))}</span>`:""}`})+'<p class="soft">Tap a state to see its cities.</p>';
+  if(plTab==="cities")body=table("City",group(rowsIn,r=>r.t?r.t+"|"+(plR!==null?"":r.c==="US"&&r.r?r.r:plC!==null?r.r:countryName(r.c)):null),k=>{const [a,b]=k.split("|");return esc(a)+(b?` <span class="soft">${esc(b)}</span>`:"")});
+  const crumb=(plTab==="states"||plTab==="cities")?`<div class="row" style="gap:6px"><span class="soft">Looking at:</span><button class="chip ${plC===null?"on":""}" data-a="plReset">Everywhere</button>${plC!==null?`<button class="chip ${plR===null?"on":""}" data-a="plCountry" data-c="${esc(plC)}" data-keep="1">${esc(countryName(plC))}</button>`:""}${plR!==null?`<span class="chip on">${esc(plR)}</span>`:""}</div>`:"";
+  return `<h2 style="transform:rotate(-1deg)">Where visitors come from</h2>
+   <div class="chips" role="group" aria-label="Time frame">${[7,30,90].map(n=>`<button class="chip ${range===n?"on":""}" data-a="range" data-n="${n}">Last ${n} days</button>`).join("")}</div>
+   <div class="sk stack"><div class="chips" role="tablist" aria-label="Place type" style="padding-bottom:2px">${tabs.map(([k,l])=>`<button class="chip ${plTab===k?"on":""}" role="tab" aria-selected="${plTab===k}" data-a="plTab" data-k="${k}">${l}</button>`).join("")}</div>
+   ${crumb}${all.length?body:'<p class="soft">No visitors in this window yet.</p>'}</div>
+   <p class="soft">${ST.cityReady?"":ST.geoReady?"City and state lookup is still loading, so new visits show a country only for now. ":"The location lookup is still loading, so new visits show as not known for now. "}Worked out from each visitor's internet address, so city is approximate and phone networks can show a nearby city. Only the place is saved, never the address. Visits from before this was added show as not known. <a href="https://db-ip.com" target="_blank" rel="noopener">IP Geolocation by DB-IP</a></p>`;
 }
 function studioNumbers(){
   const since=Date.now()-range*DAY, visits=series(ST.visits), dons=series(ST.dons), sum=a=>a.reduce((x,y)=>x+y,0);
@@ -320,7 +324,7 @@ function studioNumbers(){
     <div class="tile sk" style="transform:rotate(-1.5deg)"><span class="soft">Dislikes, all time</span><b>${num(dis)}</b></div></div>
    <p class="note">Dislikes are for your eyes only. They never lower how many people see a post.</p>
    <div class="sk stack" style="transform:rotate(1deg)"><h3>Site traffic</h3><p class="soft">People who visited each day</p>${chart(visits,"#2456d6",num)}</div>
-   ${studioPlaces()}
+   <div><button class="btn white sm" data-a="stab" data-k="places">See where visitors come from</button></div>
    <div class="sk stack" style="transform:rotate(-1deg)"><h3>Donations over time</h3>${chart(dons,"#fdb913",money)}</div>
    <div class="sk stack"><h3>Donations by post, last ${range} days</h3><div class="tblwrap"><table><tr><th>Post</th><th class="n">Tips</th><th class="n">Total</th></tr>
     ${Object.entries(by).sort((a,b)=>b[1].amt-a[1].amt).map(([id,o])=>`<tr><td>${esc(name(id))}</td><td class="n">${o.n}</td><td class="n">${money(o.amt)}</td></tr>`).join("")||'<tr><td colspan="3" class="soft">No donations in this window.</td></tr>'}</table></div></div>
@@ -418,9 +422,9 @@ function renderStudio(){
     ${me()?`<p>You're signed in as ${esc(S.me.email)}, which is not the owner account.</p><div><button class="btn white sm" data-a="logout">Log out</button></div>`
     :`<div><label for="auEmail">Username or email</label><input type="text" id="auEmail" autocapitalize="none" autocomplete="username"></div><div><label for="auPass">Password</label><input type="password" id="auPass" autocomplete="current-password" style="width:100%;background:#fff;border:2.5px solid var(--ink);border-radius:12px 4px 13px 5px/5px 12px 4px 13px;padding:8px 10px;font-size:18px"></div><div><button class="btn" data-a="login">Log in</button></div>`}</div>`;
   if(!ST)return `<h1 style="transform:rotate(-2deg)">Studio</h1><p class="soft">Loading your numbers.</p>`;
-  const tabs=[["numbers","Numbers"],["post","Post"],["golive","Go live"],["reports","Reports"],["lists","Lists"],["ads","Ads"],["merch","Merch"],["orders","Orders"],["points","Points"],["links","Links & login"]];
+  const tabs=[["numbers","Numbers"],["places","Places"],["post","Post"],["golive","Go live"],["reports","Reports"],["lists","Lists"],["ads","Ads"],["merch","Merch"],["orders","Orders"],["points","Points"],["links","Links & login"]];
   const toShip=ST.orders.filter(o=>!o.shipped).length;
-  const body={numbers:studioNumbers,post:studioPost,golive:studioLive,reports:studioReports,lists:studioLists,ads:studioAds,merch:studioMerch,orders:studioOrders,points:studioPoints,links:studioLinks}[sTab]();
+  const body={numbers:studioNumbers,places:studioPlaces,post:studioPost,golive:studioLive,reports:studioReports,lists:studioLists,ads:studioAds,merch:studioMerch,orders:studioOrders,points:studioPoints,links:studioLinks}[sTab]();
   return `<div class="row" style="justify-content:space-between"><h1 style="transform:rotate(-2deg)">Studio</h1><span class="stamp">Owner only</span></div>
    <div class="chips">${tabs.map(([k,l])=>`<button class="chip ${sTab===k?"on":""}" data-a="stab" data-k="${k}">${l}${k==="reports"&&ST.reports.length?` (${ST.reports.length})`:""}${k==="orders"&&toShip?` (${toShip})`:""}</button>`).join("")}</div>${body}`;
 }
@@ -515,7 +519,10 @@ const A={
    el.disabled=true;try{const r=await api("subscribe");location.href=r.url}catch(e){el.disabled=false;throw e}},
  cancelPaid:()=>openModal(`<div class="stack"><h2>Cancel membership?</h2><p>You keep member access until the end of the month you already paid for.</p><div class="row"><button class="btn red" data-a="cancelGo">Yes, cancel</button><button class="btn white sm" data-a="close">Keep it</button></div></div>`),
  cancelGo:async()=>{await api("cancel");closeModal();await refresh();toast("Membership will end after this billing month")},
- stab:d=>{sTab=d.k;render()}, range:d=>{range=+d.n;render()},
+ stab:d=>{sTab=d.k;render();if(d.k==="places")window.scrollTo(0,0)}, range:d=>{range=+d.n;render()},
+ plTab:d=>{plTab=d.k;plAll=false;render()}, plMore:()=>{plAll=!plAll;render()}, plReset:()=>{plC=null;plR=null;plAll=false;render()},
+ plCountry:d=>{plC=d.c;plR=null;plAll=false;if(!d.keep)plTab="states";render()},
+ plState:d=>{plC=d.c;plR=d.r;plAll=false;plTab="cities";render()},
  publish:async(d,el)=>{const kind=$("#npKind").value,title=$("#npTitle").value.trim(),cap=$("#npCap").value.trim(),tier=$("#npTier").value,f=$("#npFile").files[0],url=$("#npUrl").value.trim(),body={kind,title,cap,tier};
    if(!title)return toast("Give the post a title first");
    if(kind==="embed"){const pl=platform(url);if(!validUrl(url)||!pl)return toast("Paste a full link from YouTube, Instagram, TikTok or Facebook");body.url=url;body.platform=pl}
