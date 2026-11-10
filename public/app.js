@@ -191,7 +191,7 @@ const BLDG=[[80,80,280,220,"#c96b52"],[440,80,240,220,"#b9895a"],[760,80,280,220
 const NPC_AT=[[720,350],[400,650],[720,650],[1080,500],[400,40],[40,650]], NPC_COL=["#ff1e9c","#2456d6","#237a45"], MINIS=["catch","cups","horns"];
 const G={on:false,last:null}, IMG={};
 const ASSET_BASE=window.TOKYO_ASSET_BASE||"/img/";
-function gAssets(){gImg("detective",ASSET_BASE+"detective.png");for(let i=1;i<=5;i++)gImg("hater"+i,ASSET_BASE+"hater-"+i+".png");for(let i=0;i<10;i++)gImg("logo"+i,ASSET_BASE+"logo-"+i+".png");for(let i=1;i<=5;i++)gImg("stranger"+i,ASSET_BASE+"stranger-"+i+".png")}
+function gAssets(){gImg("detective",ASSET_BASE+"detective.png");for(let i=1;i<=5;i++)gImg("hater"+i,ASSET_BASE+"hater-"+i+".png");for(let i=0;i<10;i++)gImg("logo"+i,ASSET_BASE+"logo-"+i+".png");for(let i=1;i<=5;i++)gImg("stranger"+i,ASSET_BASE+"stranger-"+i+".png");for(let i=0;i<4;i++){gImg("wbag"+i,ASSET_BASE+"wnb-bag-"+i+".png");gImg("whome"+i,ASSET_BASE+"wnb-home-"+i+".png")}}
 const pick=a=>a[Math.floor(Math.random()*a.length)], shuffle=a=>a.map(x=>[Math.random(),x]).sort((p,q)=>p[0]-q[0]).map(x=>x[1]);
 function gImg(k,src){if(!IMG[k]){IMG[k]=new Image();IMG[k].src=src}return IMG[k]}
 function gSpots(){const s=[];BLDG.forEach((b,i)=>{const r=Math.floor(i/3);if(r<2)s.push({x:b[0]+b[2]*.5,y:b[1]+b[3],side:"s"});if(r>0&&i%2===0)s.push({x:b[0]+b[2]*.3,y:b[1],side:"n"});if(i%3<2&&i%2===1)s.push({x:b[0]+b[2],y:b[1]+b[3]*.5,side:"e"})});return s.map((o,i)=>({...o,s:i<3?"mine":"empty",logo:i%10,age:0}))}
@@ -364,9 +364,10 @@ function gQuarter(c){
 }
 
 /* ---- side quests: three things to do with your hands, drawn not written ---- */
+const DGRID=H=>{const top=98,bot=H-Math.min(118,H*.27);return {top,bot,rh:(bot-top)/2}}; // where the four homes sit in the delivery game
 // Each of the five strangers always brings the same side quest.
 const QUEST={
- 1:{type:"deliver",title:"Wake & Bake run",sub:"Tap the door that matches each bag"},
+ 1:{type:"deliver",title:"Wake & Bake run",sub:"Tap the home that matches each bag"},
  2:{type:"catch",skin:"records",title:"Gold records!",sub:"Slide the crate under 6 of them"},
  3:{type:"horns",skin:"megaphone",title:"Say it back!",sub:"Watch, then tap the same order"},
  4:{type:"meter",title:"Hit the levels!",sub:"Tap when the needle is in the green, 3 times"},
@@ -414,7 +415,7 @@ function miniDown(p){
   if(m.type==="catch")m.px=p.x;
   if(m.type==="meter"&&p.y>96){if(Math.abs(m.pos-m.zone)<.12){m.got++;m.blink=.3;m.hitOk=true;if(m.got>=m.need)return miniEnd(m,true);m.zone=.2+Math.random()*.6}else{m.miss++;m.blink=.3;m.hitOk=false;if(m.miss>=3)miniEnd(m,false)}}
   if(m.type==="lift"&&p.y>96){m.got++;m.up=1}
-  if(m.type==="deliver"&&p.y>96&&p.y<H*.66){const i=Math.max(0,Math.min(3,Math.floor((p.x-8)/((W-16)/4))));
+  if(m.type==="deliver"&&p.y>96&&p.y<DGRID(H).bot){const g=DGRID(H),i=(p.y<g.top+g.rh?0:2)+(p.x<W/2?0:1);
     if(i===m.cur){m.got++;m.fly={to:i,col:m.cur,t:0};if(m.got>=m.need)return miniEnd(m,true);let n=m.cur;while(n===m.cur)n=Math.floor(Math.random()*4);m.cur=n}
     else{m.miss++;m.bad=i;m.badT=.35;if(m.miss>=3)miniEnd(m,false)}}
   if(m.type==="cups"&&m.ready){for(let pos=0;pos<3;pos++)if(Math.abs(p.x-cupX(m,pos,W))<46&&Math.abs(p.y-H*.56)<70){m.pickd=pos;miniEnd(m,m.slot[pos]===m.baby)}}
@@ -440,21 +441,22 @@ function miniPaint(c,W,H){
     c.fillStyle="#5d5d66";c.font="15px 'Patrick Hand',cursive";c.textAlign="left";c.fillText("misses",bx+70,by+bh+35);
   }
   if(m.type==="deliver"){
-    const cols=["#fdb913","#ff1e9c","#2456d6","#237a45"],hw=(W-16)/4,top=H*.3,hh=H*.3;
+    const cols=["#f2c230","#ff3d9a","#2f6bff","#27b04a"],g=DGRID(H),cw=(W-16)/2,ok=k=>IMG[k]&&IMG[k].complete&&IMG[k].naturalWidth;
     for(let i=0;i<m.need;i++){c.beginPath();c.arc(W-22-i*20,30,7,0,7);c.fillStyle=i<m.got?"#237a45":"#ddd";c.fill();c.strokeStyle="#141414";c.lineWidth=1.5;c.stroke()}
     c.fillStyle="#c8102e";c.fillRect(8,84,(W-16)*Math.max(0,1-(m.phase==="play"?m.t/m.limit:0)),6);
-    c.fillStyle="#8d8f93";c.fillRect(4,top+hh,W-8,14); // the street the houses sit on
-    const bag=(x,y,col,s)=>{c.save();c.translate(x,y);c.scale(s,s);c.fillStyle="#c9a26b";c.strokeStyle="#141414";c.lineWidth=3;c.beginPath();c.moveTo(-26,-22);c.lineTo(26,-22);c.lineTo(30,34);c.lineTo(-30,34);c.closePath();c.fill();c.stroke();c.beginPath();c.moveTo(-26,-22);c.lineTo(-14,-36);c.lineTo(14,-36);c.lineTo(26,-22);c.closePath();c.fillStyle="#b08a55";c.fill();c.stroke();
-      c.fillStyle=col;c.beginPath();c.arc(0,8,16,0,7);c.fill();c.stroke();c.fillStyle=col==="#fdb913"?"#141414":"#fff";c.font="bold 11px sans-serif";c.textAlign="center";c.fillText("W&B",0,12);c.restore()};
-    for(let i=0;i<4;i++){const x=8+i*hw+5,w=hw-10,bad=m.badT>0&&m.bad===i;
-      c.fillStyle=bad?"#ffb3bd":"#f3ead7";c.strokeStyle="#141414";c.lineWidth=3;c.beginPath();c.rect(x,top+hh*.32,w,hh*.68);c.fill();c.stroke(); // house
-      c.fillStyle="#7a4a35";c.beginPath();c.moveTo(x-5,top+hh*.32);c.lineTo(x+w/2,top);c.lineTo(x+w+5,top+hh*.32);c.closePath();c.fill();c.stroke(); // roof
-      c.fillStyle=cols[i];c.beginPath();c.roundRect(x+w*.28,top+hh*.5,w*.44,hh*.5,[6,6,0,0]);c.fill();c.stroke();c.fillStyle="#141414";c.beginPath();c.arc(x+w*.62,top+hh*.78,2.5,0,7);c.fill()} // door
-    const bx=W/2,by=H*.8;
-    if(m.fly){const tx=8+m.fly.to*hw+hw/2,ty=top+hh*.75,e=m.fly.t;bag(bx+(tx-bx)*e,by+(ty-by)*e-Math.sin(e*Math.PI)*40,cols[m.fly.col],1-e*.6)}
-    if(m.phase!=="done")bag(bx,by,cols[m.cur],1.1);
-    for(let i=0;i<3;i++){c.beginPath();c.arc(22+i*20,H-22,7,0,7);c.fillStyle=i<m.miss?"#c8102e":"#ddd";c.fill();c.strokeStyle="#141414";c.lineWidth=1.5;c.stroke()}
-    c.fillStyle="#5d5d66";c.font="15px 'Patrick Hand',cursive";c.textAlign="left";c.fillText("wrong doors",84,H-17);
+    const cell=i=>({x:8+(i%2)*cw,y:g.top+Math.floor(i/2)*g.rh});
+    const bag=(x,y,i,size)=>{c.imageSmoothingEnabled=false;if(ok("wbag"+i)){const im=IMG["wbag"+i],w=size*im.naturalWidth/im.naturalHeight;c.drawImage(im,x-w/2,y-size/2,w,size)}else{c.fillStyle=cols[i];c.strokeStyle="#141414";c.lineWidth=3;c.beginPath();c.arc(x,y,size*.4,0,7);c.fill();c.stroke()}};
+    for(let i=0;i<4;i++){const q=cell(i),bad=m.badT>0&&m.bad===i,pad=5,aw=cw-pad*2,ah=g.rh-pad*2-10;
+      c.fillStyle=cols[i];c.strokeStyle="#141414";c.lineWidth=2;c.beginPath();c.roundRect(q.x+cw*.2,q.y+g.rh-13,cw*.6,9,4);c.fill();c.stroke(); // a mat in the bag's color under each home
+      c.imageSmoothingEnabled=false;
+      if(ok("whome"+i)){const im=IMG["whome"+i],k=Math.min(aw/im.naturalWidth,ah/im.naturalHeight),w=im.naturalWidth*k,hh=im.naturalHeight*k;c.drawImage(im,q.x+cw/2-w/2,q.y+g.rh-12-hh,w,hh)}
+      else{c.fillStyle=cols[i];c.lineWidth=3;c.beginPath();c.rect(q.x+cw*.2,q.y+g.rh*.3,cw*.6,g.rh*.55);c.fill();c.stroke()}
+      if(bad){c.fillStyle="rgba(200,16,46,.35)";c.fillRect(q.x+2,q.y+2,cw-4,g.rh-4)}}
+    const bx=W/2,by=g.bot+(H-g.bot)/2+2,bs=Math.min(96,(H-g.bot)-14);
+    if(m.fly){const q=cell(m.fly.to),tx=q.x+cw/2,ty=q.y+g.rh*.6,e=m.fly.t;bag(bx+(tx-bx)*e,by+(ty-by)*e-Math.sin(e*Math.PI)*40,m.fly.col,bs*(1-e*.55))}
+    if(m.phase!=="done")bag(bx,by,m.cur,bs);
+    for(let i=0;i<3;i++){c.beginPath();c.arc(20+i*19,H-20,7,0,7);c.fillStyle=i<m.miss?"#c8102e":"#ddd";c.fill();c.strokeStyle="#141414";c.lineWidth=1.5;c.stroke()}
+    c.fillStyle="#5d5d66";c.font="14px 'Patrick Hand',cursive";c.textAlign="left";c.fillText("wrong",12,H-34);
   }
   if(m.type==="lift"){
     c.fillStyle="#c8102e";c.fillRect(8,84,(W-16)*Math.max(0,1-(m.phase==="play"?m.t/m.limit:0)),6);
