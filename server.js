@@ -119,9 +119,16 @@ async function seedMerch() {
     const src = path.join(__dirname, "seed", "merch", file + ".jpg"), name = sha("merch1:" + file).slice(0, 24) + ".jpg";
     if (!fs.existsSync(src)) continue;
     fs.copyFileSync(src, path.join(UP, name));
-    await run("INSERT INTO products(name,cents,img,shirt,sizes,ts) VALUES(?,?,?,1,?,?)", "TokyoYoungin " + brand + " Tee", 3200, name, "S,M,L,XL,2XL", Date.now());
+    await run("INSERT INTO products(name,cents,img,shirt,sizes,ts) VALUES(?,?,?,1,?,?)", "TokyoYoungin " + brand + " Tee", 6000, name, "S,M,L,XL,2XL", Date.now());
   }
   await setkv("seed_merch_1", Date.now()); console.log("added the first ten tees to the store");
+}
+// One-time price change for those ten tees: $60 each.
+async function priceMerch() {
+  if (kv("price_merch_1")) return;
+  const names = MERCH_SEED.map(([file]) => sha("merch1:" + file).slice(0, 24) + ".jpg");
+  const r = await all("UPDATE products SET cents=6000 WHERE img IN (" + names.map(() => "?").join(",") + ") RETURNING id", ...names);
+  await setkv("price_merch_1", Date.now()); console.log("set " + r.length + " tees to $60");
 }
 
 /* ---------- rate limit ---------- */
@@ -544,5 +551,6 @@ const server = http.createServer(async (req, res) => {
   for (const r of await all("SELECT k, v FROM kv")) { try { kvCache.set(r.k, JSON.parse(r.v)); } catch (e) {} }
   await bootOwners();
   await seedMerch();
+  await priceMerch();
   server.listen(PORT, () => { console.log("TokyoYoungin site on " + BASE + " · payments " + (KEY ? "on" : "off") + " · Postgres · uploads in " + UP); ensureWebhook(); });
 })().catch(e => { console.error("startup failed:", e); process.exit(1); });
