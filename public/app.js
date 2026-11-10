@@ -191,14 +191,14 @@ const BLDG=[[80,80,280,220,"#c96b52"],[440,80,240,220,"#b9895a"],[760,80,280,220
 const NPC_AT=[[720,350],[400,650],[720,650],[1080,500],[400,40],[40,650]], NPC_COL=["#ff1e9c","#2456d6","#237a45"], MINIS=["catch","cups","horns"];
 const G={on:false,last:null}, IMG={};
 const ASSET_BASE=window.TOKYO_ASSET_BASE||"/img/";
-function gAssets(){gImg("detective",ASSET_BASE+"detective.png");for(let i=1;i<=5;i++)gImg("hater"+i,ASSET_BASE+"hater-"+i+".png");for(let i=0;i<10;i++)gImg("logo"+i,ASSET_BASE+"logo-"+i+".png")}
+function gAssets(){gImg("detective",ASSET_BASE+"detective.png");for(let i=1;i<=5;i++)gImg("hater"+i,ASSET_BASE+"hater-"+i+".png");for(let i=0;i<10;i++)gImg("logo"+i,ASSET_BASE+"logo-"+i+".png");for(let i=1;i<=5;i++)gImg("stranger"+i,ASSET_BASE+"stranger-"+i+".png")}
 const pick=a=>a[Math.floor(Math.random()*a.length)], shuffle=a=>a.map(x=>[Math.random(),x]).sort((p,q)=>p[0]-q[0]).map(x=>x[1]);
 function gImg(k,src){if(!IMG[k]){IMG[k]=new Image();IMG[k].src=src}return IMG[k]}
 function gSpots(){const s=[];BLDG.forEach((b,i)=>{const r=Math.floor(i/3);if(r<2)s.push({x:b[0]+b[2]*.5,y:b[1]+b[3],side:"s"});if(r>0&&i%2===0)s.push({x:b[0]+b[2]*.3,y:b[1],side:"n"});if(i%3<2&&i%2===1)s.push({x:b[0]+b[2],y:b[1]+b[3]*.5,side:"e"})});return s.map((o,i)=>({...o,s:i<3?"mine":"empty",logo:i%10,age:0}))}
 async function gStart(){
   if(!paid()||G.on||G.starting)return;G.starting=true;
   try{const r=await api("gameStart");S.me.day.shifts++;
-    Object.assign(G,{on:true,id:r.id,t:0,cred:0,heat:0,supply:6,spots:gSpots(),spawnIn:3,intel:[],ig:false,px:400,py:350,face:1,walk:0,inx:0,iny:0,keys:{},joy:null,act:null,still:0,npcs:[],npcPlan:shuffle(NPC_AT).slice(0,3).map((p,i)=>({at:[10,45,80][i],x:p[0],y:p[1],col:NPC_COL[i],mini:shuffle(MINIS)[0]})),mini:null,flash:null,last_t:0,hudKey:"",btnKey:""});
+    Object.assign(G,{on:true,id:r.id,t:0,cred:0,heat:0,supply:6,spots:gSpots(),spawnIn:3,intel:[],ig:false,px:400,py:350,face:1,walk:0,inx:0,iny:0,keys:{},joy:null,act:null,still:0,npcs:[],npcPlan:shuffle(NPC_AT).slice(0,3).map((p,i)=>({at:[10,45,80][i],x:p[0],y:p[1],col:NPC_COL[i],mini:shuffle(MINIS)[0]})),strangerPick:shuffle([1,2,3,4,5]),mini:null,flash:null,last_t:0,hudKey:"",btnKey:""});
     const kinds=shuffle(MINIS);G.npcPlan.forEach((n,i)=>n.mini=kinds[i]); // one of each mini-game per shift
     G.logoNext=3;G.haterNext=0;G.board=window.innerWidth>700;G.haters=Array.from({length:5},(_,i)=>({id:i+1,x:[40,400,720,1080,40][i],y:[350,40,650,350,940][i],path:[],target:null,posting:0,walk:0}));
     render();gMount();
@@ -245,7 +245,7 @@ function gStep(dt){
   if(G.heat>=3){G.ig=true;G.cred+=PTS.ig;return gEnd()}
   G.spawnIn-=dt;if(G.spawnIn<=0){gDispatchHater();G.spawnIn=9}gHaterStep(dt);
   // strangers show up one at a time and wait a while
-  while(G.npcPlan.length&&G.t>=G.npcPlan[0].at){const n=G.npcPlan.shift();G.npcs.push({...n,left:38,done:false})}
+  while(G.npcPlan.length&&G.t>=G.npcPlan[0].at){const n=G.npcPlan.shift();n.who=G.strangerPick[G.npcs.length%5];G.npcs.push({...n,left:38,done:false})}
   G.npcs.forEach(n=>{if(!n.done){n.left-=dt;if(n.left<=0)n.done=true}});
   if(G.flash){G.flash.t+=dt;if(G.flash.t>1.1)G.flash=null}
   if(G.t>=SHIFT_SECS)return gEnd();
@@ -258,10 +258,10 @@ function gHud(){
 }
 /* ---- drawing ---- */
 function person(c,x,y,col,o={}){
- const im=IMG[o.hat?'detective':o.hater?'hater'+o.hater:''];
+ const im=IMG[o.hat?'detective':o.hater?'hater'+o.hater:o.stranger?'stranger'+o.stranger:''];
  const bob=o.moving?Math.sin(o.walk)*1.5:0;c.save();c.translate(x,y);
  c.fillStyle='rgba(14,25,23,.25)';c.beginPath();c.ellipse(0,9,14,5,0,0,7);c.fill();
- if(im&&im.complete&&im.naturalWidth){const h=o.hat?72:66,w=h*im.naturalWidth/im.naturalHeight;c.imageSmoothingEnabled=false;c.drawImage(im,-w/2,10-h+bob,w,h)}
+ if(im&&im.complete&&im.naturalWidth){let h=o.hat?72:66,w=h*im.naturalWidth/im.naturalHeight;if(o.stranger&&w>54){h*=54/w;w=54}c.imageSmoothingEnabled=false;c.drawImage(im,-w/2,10-h+bob,w,h)}
  else {c.fillStyle=col;c.fillRect(-9,-18,18,27);c.fillStyle='#9a623f';c.fillRect(-7,-32,14,14);c.fillStyle='#182c29';c.fillRect(-9,5,7,9);c.fillRect(2,5,7,9)}c.restore();
 }
 const LANEX=[40,400,720,1080], LANEY=[40,350,650,940];
@@ -304,7 +304,7 @@ function gPaint(){
   c.imageSmoothingEnabled=false;gQuarter(c);
   G.spots.forEach(s=>posterAt(c,s,G.t));
   G.haters.forEach(h=>{person(c,h.x,h.y,"#ad3545",{hater:h.id,moving:h.path.length>0,walk:h.walk});c.font="bold 9px monospace";c.textAlign="center";c.fillStyle="#fff5dc";c.fillRect(h.x-25,h.y+14,50,13);c.fillStyle="#8c2435";c.fillText("HATER "+h.id,h.x,h.y+24);if(h.target&&!h.path.length){c.fillStyle="#f0bb48";c.fillRect(h.x+12,h.y-35,12,17);c.fillStyle="#d53345";c.fillRect(h.x-20,h.y-66,40*h.posting/1.2,4)}});
-  G.npcs.forEach(n=>{if(n.done)return;person(c,n.x,n.y,n.col,{});const by=n.y-52+Math.sin(G.t*4)*3;c.fillStyle="#fff";c.strokeStyle="#141414";c.lineWidth=2.5;c.beginPath();c.arc(n.x,by,12,0,7);c.fill();c.stroke();c.fillStyle="#c8102e";c.font="bold 18px sans-serif";c.textAlign="center";c.fillText("!",n.x,by+6);
+  G.npcs.forEach(n=>{if(n.done)return;person(c,n.x,n.y,n.col,{stranger:n.who});const by=n.y-76+Math.sin(G.t*4)*3;c.fillStyle="#fff";c.strokeStyle="#141414";c.lineWidth=2.5;c.beginPath();c.arc(n.x,by,12,0,7);c.fill();c.stroke();c.fillStyle="#c8102e";c.font="bold 18px sans-serif";c.textAlign="center";c.fillText("!",n.x,by+6);
     c.strokeStyle=n.left<10?"#c8102e":"#2456d6";c.lineWidth=3;c.beginPath();c.arc(n.x,by,16,-Math.PI/2,-Math.PI/2+Math.PI*2*Math.max(0,n.left/38));c.stroke()});
   const tg=G.act?G.act.o:(gTarget()||{}).o;if(tg){c.strokeStyle="#fff";c.lineWidth=3;c.setLineDash([6,5]);c.beginPath();c.arc(tg.x,tg.y,38+Math.sin(G.t*6)*2,0,7);c.stroke();c.setLineDash([])}
   person(c,G.px,G.py,"#fdb913",{hat:true,moving:G.still===0,walk:G.walk,face:G.face});
@@ -365,7 +365,7 @@ function gQuarter(c){
 
 /* ---- side quests: three things to do with your hands, drawn not written ---- */
 function miniStart(n){
-  n.done=true;G.joy=null;G.act=null;const m={type:n.mini,col:n.col,t:0,phase:"intro",res:null,px:G.W/2};
+  n.done=true;G.joy=null;G.act=null;const m={type:n.mini,col:n.col,who:n.who,t:0,phase:"intro",res:null,px:G.W/2};
   if(m.type==="catch")Object.assign(m,{limit:16,need:6,got:0,drops:[],next:.4});
   if(m.type==="cups")Object.assign(m,{baby:Math.floor(Math.random()*3),slot:[0,1,2],swaps:[],swapT:0,cur:null,pickd:-1});
   if(m.type==="horns")Object.assign(m,{seq:Array.from({length:4},()=>Math.floor(Math.random()*4)),show:0,showT:0,inp:0,lit:-1,litT:0});
@@ -405,7 +405,7 @@ function miniMove(p){const m=G.mini;if(m&&m.type==="catch"&&m.phase==="play")m.p
 function miniPaint(c,W,H){
   const m=G.mini;c.fillStyle="#fbfaf5";c.fillRect(0,0,W,H);c.strokeStyle="#141414";c.lineWidth=4;c.strokeRect(2,2,W-4,H-4);
   // the stranger and a picture of what they need
-  person(c,36,62,m.col,{});c.fillStyle="#141414";c.font="22px 'Permanent Marker',cursive";c.textAlign="left";c.fillText({catch:"Catch my beads!",cups:"Where's the baby?",horns:"Play it back!"}[m.type],64,48);
+  person(c,34,62,m.col,{stranger:m.who});c.fillStyle="#141414";c.font="22px 'Permanent Marker',cursive";c.textAlign="left";c.fillText({catch:"Catch my beads!",cups:"Where's the baby?",horns:"Play it back!"}[m.type],64,48);
   c.font="15px 'Patrick Hand',cursive";c.fillStyle="#5d5d66";c.fillText({catch:"Slide the basket under 6 of them",cups:"Watch the cups, then tap one",horns:"Watch the horns, then tap the same order"}[m.type],64,70);
   if(m.type==="catch"){
     for(let i=0;i<m.need;i++){c.beginPath();c.arc(W-22-i*20,30,7,0,7);c.fillStyle=i<m.got?"#237a45":"#ddd";c.fill();c.strokeStyle="#141414";c.lineWidth=1.5;c.stroke()}
@@ -468,6 +468,7 @@ function renderGame(){
     <div class="meter"><i style="width:${Math.min(100,100*S.me.pts/next)}%"></i></div><p class="soft">${S.me.pts>=5000?"Top of the board.":num(next-S.me.pts)+" to go until the "+num(next)+" point reward"}</p></div>
    ${L?`<div class="sk stack" style="transform:rotate(1.5deg)"><h3>${L.ig?"They took down your Instagram":"Shift report"}</h3><p>${L.cred} cred, so <b>${L.pts>0?"+":""}${L.pts} points</b>.</p>${L.intel.length?`<ul style="margin:0;padding-left:22px">${L.intel.map(x=>`<li>${esc(x)}</li>`).join("")}</ul>`:'<p class="soft">No intel this time. Help the strangers.</p>'}</div>`:""}
    <div class="stack"><div><button class="btn red" data-a="gStart" ${d.shifts>=SHIFTS?"disabled":""}>${d.shifts>=SHIFTS?"No shifts left today":"Start a 2 minute shift"}</button></div><p class="soft">${Math.max(0,SHIFTS-d.shifts)} of ${SHIFTS} shifts left today</p></div>
+   <div class="sk stack"><h3>Strangers who need a hand</h3><div class="cast">${[1,2,3,4,5].map(i=>`<img src="/img/stranger-${i}.png" alt="Stranger ${i}" loading="lazy">`).join("")}</div><p class="soft">Three of them turn up each shift.</p></div>
    ${rules}${rewardsHtml(true)}${earnHtml()}`;
 }
 
