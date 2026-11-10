@@ -111,6 +111,19 @@ async function bootOwners() {
   }
 }
 
+// First merch drop: ten tees added once. Deleting one in Studio keeps it deleted.
+const MERCH_SEED = [["bet", "BET"], ["hot97", "Hot 97"], ["mtv", "MTV"], ["vibe", "VIBE"], ["xxl", "XXL"], ["breakfast-club", "Breakfast Club"], ["complex", "Complex"], ["no-jumper", "No Jumper"], ["shade-room", "Shade Room"], ["worldstarhiphop", "WorldStarHipHop"]];
+async function seedMerch() {
+  if (kv("seed_merch_1")) return;
+  for (const [file, brand] of MERCH_SEED) {
+    const src = path.join(__dirname, "seed", "merch", file + ".jpg"), name = sha("merch1:" + file).slice(0, 24) + ".jpg";
+    if (!fs.existsSync(src)) continue;
+    fs.copyFileSync(src, path.join(UP, name));
+    await run("INSERT INTO products(name,cents,img,shirt,sizes,ts) VALUES(?,?,?,1,?,?)", "TokyoYoungin " + brand + " Tee", 3200, name, "S,M,L,XL,2XL", Date.now());
+  }
+  await setkv("seed_merch_1", Date.now()); console.log("added the first ten tees to the store");
+}
+
 /* ---------- rate limit ---------- */
 const hits = new Map();
 function limit(ip, name, max, perMs = 60000) {
@@ -530,5 +543,6 @@ const server = http.createServer(async (req, res) => {
   await importSqlite();
   for (const r of await all("SELECT k, v FROM kv")) { try { kvCache.set(r.k, JSON.parse(r.v)); } catch (e) {} }
   await bootOwners();
+  await seedMerch();
   server.listen(PORT, () => { console.log("TokyoYoungin site on " + BASE + " · payments " + (KEY ? "on" : "off") + " · Postgres · uploads in " + UP); ensureWebhook(); });
 })().catch(e => { console.error("startup failed:", e); process.exit(1); });
