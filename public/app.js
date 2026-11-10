@@ -191,7 +191,7 @@ const BLDG=[[80,80,280,220,"#c96b52"],[440,80,240,220,"#b9895a"],[760,80,280,220
 const NPC_AT=[[720,350],[400,650],[720,650],[1080,500],[400,40],[40,650]], NPC_COL=["#ff1e9c","#2456d6","#237a45"], MINIS=["catch","cups","horns"];
 const G={on:false,last:null}, IMG={};
 const ASSET_BASE=window.TOKYO_ASSET_BASE||"/img/";
-function gAssets(){gImg("detective",ASSET_BASE+"detective.png");for(let i=1;i<=5;i++)gImg("hater"+i,ASSET_BASE+"hater-"+i+".png");for(let i=0;i<10;i++)gImg("logo"+i,ASSET_BASE+"logo-"+i+".png");for(let i=1;i<=5;i++)gImg("stranger"+i,ASSET_BASE+"stranger-"+i+".png");for(let i=0;i<4;i++){gImg("wbag"+i,ASSET_BASE+"wnb-bag-"+i+".png");gImg("whome"+i,ASSET_BASE+"wnb-home-"+i+".png");gImg("bullhorn"+i,ASSET_BASE+"bullhorn-"+i+".png?v=2")}}
+function gAssets(){gImg("detective",ASSET_BASE+"detective.png");for(let i=1;i<=5;i++)gImg("hater"+i,ASSET_BASE+"hater-"+i+".png");for(let i=0;i<10;i++)gImg("logo"+i,ASSET_BASE+"logo-"+i+".png");for(let i=1;i<=5;i++)gImg("stranger"+i,ASSET_BASE+"stranger-"+i+".png");for(let i=0;i<4;i++){gImg("wbag"+i,ASSET_BASE+"wnb-bag-"+i+".png");gImg("whome"+i,ASSET_BASE+"wnb-home-"+i+".png");gImg("bullhorn"+i,ASSET_BASE+"bullhorn-"+i+".png?v=2")}gImg("cmbox",ASSET_BASE+"cm-box.png");gImg("cmrecord",ASSET_BASE+"cm-record.png");gImg("goldbar",ASSET_BASE+"gold-barbell.png")}
 const pick=a=>a[Math.floor(Math.random()*a.length)], shuffle=a=>a.map(x=>[Math.random(),x]).sort((p,q)=>p[0]-q[0]).map(x=>x[1]);
 function gImg(k,src){if(!IMG[k]){IMG[k]=new Image();IMG[k].src=src}return IMG[k]}
 function gSpots(){const s=[];BLDG.forEach((b,i)=>{const r=Math.floor(i/3);if(r<2)s.push({x:b[0]+b[2]*.5,y:b[1]+b[3],side:"s"});if(r>0&&i%2===0)s.push({x:b[0]+b[2]*.3,y:b[1],side:"n"});if(i%3<2&&i%2===1)s.push({x:b[0]+b[2],y:b[1]+b[3]*.5,side:"e"})});return s.map((o,i)=>({...o,s:i<3?"mine":"empty",logo:i%10,age:0}))}
@@ -368,7 +368,7 @@ const DGRID=H=>{const top=98,bot=H-Math.min(118,H*.27);return {top,bot,rh:(bot-t
 // Each of the five strangers always brings the same side quest.
 const QUEST={
  1:{type:"deliver",title:"Wake & Bake run",sub:"Tap the home that matches each bag"},
- 2:{type:"catch",skin:"records",title:"Gold records!",sub:"Slide the crate under 6 of them"},
+ 2:{type:"catch",skin:"records",title:"Gold records!",sub:"Slide the box under 6 of them"},
  3:{type:"horns",skin:"megaphone",title:"Say it back!",sub:"Watch, then tap the same order"},
  4:{type:"meter",title:"Hit the levels!",sub:"Tap when the needle is in the green, 3 times"},
  5:{type:"lift",title:"Spot me!",sub:"Tap fast to finish 12 reps"}};
@@ -463,15 +463,22 @@ function miniPaint(c,W,H){
     const cx=W/2,by=H*.62-m.up*70; // a barbell that jumps with every tap
     c.strokeStyle="#141414";c.lineWidth=5;c.beginPath();c.moveTo(cx-70,H*.78);c.lineTo(cx-70,H*.5);c.moveTo(cx+70,H*.78);c.lineTo(cx+70,H*.5);c.stroke(); // rack
     c.fillStyle="#cfcabd";c.beginPath();c.roundRect(cx-60,H*.74,120,16,5);c.fill();c.stroke(); // bench
+    const gb=IMG.goldbar;
+    if(gb&&gb.complete&&gb.naturalWidth){const w=Math.min(330,W*.92),bh2=w*gb.naturalHeight/gb.naturalWidth;c.imageSmoothingEnabled=false;c.drawImage(gb,cx-w/2,by-bh2/2,w,bh2)} // the supplied gold barbell
+    else{
     c.lineWidth=7;c.strokeStyle="#5d5f66";c.beginPath();c.moveTo(cx-Math.min(150,W*.42),by);c.lineTo(cx+Math.min(150,W*.42),by);c.stroke();
-    [[-1,34,"#c8102e"],[-1,24,"#2456d6"],[1,34,"#c8102e"],[1,24,"#2456d6"]].forEach(([s,r,col],i)=>{const px=cx+s*(Math.min(150,W*.42)-(i%2?26:10));c.fillStyle=col;c.strokeStyle="#141414";c.lineWidth=3;c.beginPath();c.roundRect(px-7,by-r,14,r*2,4);c.fill();c.stroke()});
+    [[-1,34,"#c8102e"],[-1,24,"#2456d6"],[1,34,"#c8102e"],[1,24,"#2456d6"]].forEach(([s,r,col],i)=>{const px=cx+s*(Math.min(150,W*.42)-(i%2?26:10));c.fillStyle=col;c.strokeStyle="#141414";c.lineWidth=3;c.beginPath();c.roundRect(px-7,by-r,14,r*2,4);c.fill();c.stroke()});}
     c.fillStyle="#141414";c.textAlign="center";c.font="54px 'Permanent Marker',cursive";c.fillText(Math.min(m.got,m.need)+" / "+m.need,cx,H*.34);
     if(m.phase==="play"){c.font="18px 'Permanent Marker',cursive";c.fillText("Tap! Tap! Tap!",cx,H-26)}
   }
   if(m.type==="catch"){
     for(let i=0;i<m.need;i++){c.beginPath();c.arc(W-22-i*20,30,7,0,7);c.fillStyle=i<m.got?"#237a45":"#ddd";c.fill();c.strokeStyle="#141414";c.lineWidth=1.5;c.stroke()}
     c.fillStyle="#c8102e";c.fillRect(8,84,(W-16)*Math.max(0,1-(m.phase==="play"?m.t/m.limit:0)),6);
-    if(m.skin==="records"){m.drops.forEach(d=>{c.fillStyle="#f2c230";c.strokeStyle="#141414";c.lineWidth=2.5;c.beginPath();c.arc(d.x,d.y,17,0,7);c.fill();c.stroke();c.strokeStyle="#b8860b";c.lineWidth=1.5;[12,8].forEach(r=>{c.beginPath();c.arc(d.x,d.y,r,0,7);c.stroke()});c.fillStyle="#fffdf6";c.strokeStyle="#141414";c.beginPath();c.arc(d.x,d.y,4.5,0,7);c.fill();c.stroke()});
+    const rec=IMG.cmrecord,box=IMG.cmbox,art=rec&&rec.complete&&rec.naturalWidth&&box&&box.complete&&box.naturalWidth;
+    if(m.skin==="records"&&art){c.imageSmoothingEnabled=false; // the supplied gold record and jeweled box
+      m.drops.forEach(d=>c.drawImage(rec,d.x-21,d.y-21,42,42));
+      const bw=112,bh=bw*box.naturalHeight/box.naturalWidth;c.drawImage(box,m.px-bw/2,H-26-bh,bw,bh)}
+    else if(m.skin==="records"){m.drops.forEach(d=>{c.fillStyle="#f2c230";c.strokeStyle="#141414";c.lineWidth=2.5;c.beginPath();c.arc(d.x,d.y,17,0,7);c.fill();c.stroke();c.strokeStyle="#b8860b";c.lineWidth=1.5;[12,8].forEach(r=>{c.beginPath();c.arc(d.x,d.y,r,0,7);c.stroke()});c.fillStyle="#fffdf6";c.strokeStyle="#141414";c.beginPath();c.arc(d.x,d.y,4.5,0,7);c.fill();c.stroke()});
       c.fillStyle="#a8785e";c.strokeStyle="#141414";c.lineWidth=3;c.beginPath();c.rect(m.px-44,H-78,88,44);c.fill();c.stroke();c.lineWidth=2;[-22,0,22].forEach(v=>{c.beginPath();c.moveTo(m.px+v,H-78);c.lineTo(m.px+v,H-34);c.stroke()});c.beginPath();c.moveTo(m.px-44,H-56);c.lineTo(m.px+44,H-56);c.stroke()}
     else{m.drops.forEach(d=>{c.strokeStyle=d.c;c.lineWidth=4;c.beginPath();c.arc(d.x,d.y,13,0,7);c.stroke();for(let k=0;k<8;k++){c.fillStyle=d.c;c.beginPath();c.arc(d.x+Math.cos(k*.785)*13,d.y+Math.sin(k*.785)*13,4,0,7);c.fill()}});
     c.fillStyle="#fdb913";c.strokeStyle="#141414";c.lineWidth=3;c.beginPath();c.moveTo(m.px-44,H-74);c.lineTo(m.px+44,H-74);c.lineTo(m.px+32,H-36);c.lineTo(m.px-32,H-36);c.closePath();c.fill();c.stroke();c.beginPath();c.arc(m.px,H-74,40,Math.PI,0);c.stroke()}
