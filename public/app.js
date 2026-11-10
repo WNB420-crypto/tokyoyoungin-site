@@ -366,7 +366,7 @@ function gQuarter(c){
 /* ---- side quests: three things to do with your hands, drawn not written ---- */
 // Each of the five strangers always brings the same side quest.
 const QUEST={
- 1:{type:"cups",skin:"book",title:"Where's my book?",sub:"Watch the cups, then tap one"},
+ 1:{type:"deliver",title:"Wake & Bake run",sub:"Tap the door that matches each bag"},
  2:{type:"catch",skin:"records",title:"Gold records!",sub:"Slide the crate under 6 of them"},
  3:{type:"horns",skin:"megaphone",title:"Say it back!",sub:"Watch, then tap the same order"},
  4:{type:"meter",title:"Hit the levels!",sub:"Tap when the needle is in the green, 3 times"},
@@ -376,6 +376,7 @@ function miniStart(n){
   n.done=true;G.joy=null;G.act=null;const m={type:q.type,skin:q.skin||"",title:q.title||"",sub:q.sub||"",col:n.col,who:n.who,t:0,phase:"intro",res:null,px:G.W/2};
   if(m.type==="meter")Object.assign(m,{limit:18,need:3,got:0,miss:0,pos:0,zone:.3+Math.random()*.4,blink:0});
   if(m.type==="lift")Object.assign(m,{limit:9,need:12,got:0,up:0});
+  if(m.type==="deliver")Object.assign(m,{limit:18,need:6,got:0,miss:0,cur:Math.floor(Math.random()*4),fly:null,bad:-1,badT:0});
   if(m.type==="catch")Object.assign(m,{limit:16,need:6,got:0,drops:[],next:.4});
   if(m.type==="cups")Object.assign(m,{baby:Math.floor(Math.random()*3),slot:[0,1,2],swaps:[],swapT:0,cur:null,pickd:-1});
   if(m.type==="horns")Object.assign(m,{seq:Array.from({length:4},()=>Math.floor(Math.random()*4)),show:0,showT:0,inp:0,lit:-1,litT:0});
@@ -400,6 +401,7 @@ function miniStep(dt){
     else if(!m.swaps.length)m.ready=true;
   }
   if(m.type==="meter"){m.pos=.5+.5*Math.sin(m.t*2.3);if(m.blink>0)m.blink-=dt;if(m.t>m.limit)miniEnd(m,false)}
+  if(m.type==="deliver"){if(m.fly){m.fly.t+=dt/.35;if(m.fly.t>=1)m.fly=null}if(m.badT>0)m.badT-=dt;if(m.t>m.limit)miniEnd(m,false)}
   if(m.type==="lift"){m.up=Math.max(0,m.up-dt*4);if(m.got>=m.need)miniEnd(m,true);else if(m.t>m.limit)miniEnd(m,false)}
   if(m.type==="horns"){
     if(m.show<m.seq.length){m.showT+=dt;m.lit=m.showT<.55?m.seq[m.show]:-1;if(m.showT>.8){m.show++;m.showT=0}}
@@ -412,6 +414,9 @@ function miniDown(p){
   if(m.type==="catch")m.px=p.x;
   if(m.type==="meter"&&p.y>96){if(Math.abs(m.pos-m.zone)<.12){m.got++;m.blink=.3;m.hitOk=true;if(m.got>=m.need)return miniEnd(m,true);m.zone=.2+Math.random()*.6}else{m.miss++;m.blink=.3;m.hitOk=false;if(m.miss>=3)miniEnd(m,false)}}
   if(m.type==="lift"&&p.y>96){m.got++;m.up=1}
+  if(m.type==="deliver"&&p.y>96&&p.y<H*.66){const i=Math.max(0,Math.min(3,Math.floor((p.x-8)/((W-16)/4))));
+    if(i===m.cur){m.got++;m.fly={to:i,col:m.cur,t:0};if(m.got>=m.need)return miniEnd(m,true);let n=m.cur;while(n===m.cur)n=Math.floor(Math.random()*4);m.cur=n}
+    else{m.miss++;m.bad=i;m.badT=.35;if(m.miss>=3)miniEnd(m,false)}}
   if(m.type==="cups"&&m.ready){for(let pos=0;pos<3;pos++)if(Math.abs(p.x-cupX(m,pos,W))<46&&Math.abs(p.y-H*.56)<70){m.pickd=pos;miniEnd(m,m.slot[pos]===m.baby)}}
   if(m.type==="horns"&&m.ready){if(p.y<96)return;const col=p.x<W/2?0:1,row=p.y<100+(H-112)/2+2?0:1,i=row*2+col;m.lit=i;m.litT=.25;if(m.seq[m.inp]===i){m.inp++;if(m.inp>=m.seq.length)miniEnd(m,true)}else miniEnd(m,false)}
 }
@@ -433,6 +438,23 @@ function miniPaint(c,W,H){
     c.fillStyle=m.blink>0&&!m.hitOk?"#ff5a6e":"#fdb913";c.fillRect(bx+bw*m.pos-4,by-10,8,bh+20);c.strokeStyle="#141414";c.lineWidth=2;c.strokeRect(bx+bw*m.pos-4,by-10,8,bh+20);
     for(let i=0;i<3;i++){c.beginPath();c.arc(bx+10+i*20,by+bh+30,7,0,7);c.fillStyle=i<m.miss?"#c8102e":"#ddd";c.fill();c.strokeStyle="#141414";c.lineWidth=1.5;c.stroke()}
     c.fillStyle="#5d5d66";c.font="15px 'Patrick Hand',cursive";c.textAlign="left";c.fillText("misses",bx+70,by+bh+35);
+  }
+  if(m.type==="deliver"){
+    const cols=["#fdb913","#ff1e9c","#2456d6","#237a45"],hw=(W-16)/4,top=H*.3,hh=H*.3;
+    for(let i=0;i<m.need;i++){c.beginPath();c.arc(W-22-i*20,30,7,0,7);c.fillStyle=i<m.got?"#237a45":"#ddd";c.fill();c.strokeStyle="#141414";c.lineWidth=1.5;c.stroke()}
+    c.fillStyle="#c8102e";c.fillRect(8,84,(W-16)*Math.max(0,1-(m.phase==="play"?m.t/m.limit:0)),6);
+    c.fillStyle="#8d8f93";c.fillRect(4,top+hh,W-8,14); // the street the houses sit on
+    const bag=(x,y,col,s)=>{c.save();c.translate(x,y);c.scale(s,s);c.fillStyle="#c9a26b";c.strokeStyle="#141414";c.lineWidth=3;c.beginPath();c.moveTo(-26,-22);c.lineTo(26,-22);c.lineTo(30,34);c.lineTo(-30,34);c.closePath();c.fill();c.stroke();c.beginPath();c.moveTo(-26,-22);c.lineTo(-14,-36);c.lineTo(14,-36);c.lineTo(26,-22);c.closePath();c.fillStyle="#b08a55";c.fill();c.stroke();
+      c.fillStyle=col;c.beginPath();c.arc(0,8,16,0,7);c.fill();c.stroke();c.fillStyle=col==="#fdb913"?"#141414":"#fff";c.font="bold 11px sans-serif";c.textAlign="center";c.fillText("W&B",0,12);c.restore()};
+    for(let i=0;i<4;i++){const x=8+i*hw+5,w=hw-10,bad=m.badT>0&&m.bad===i;
+      c.fillStyle=bad?"#ffb3bd":"#f3ead7";c.strokeStyle="#141414";c.lineWidth=3;c.beginPath();c.rect(x,top+hh*.32,w,hh*.68);c.fill();c.stroke(); // house
+      c.fillStyle="#7a4a35";c.beginPath();c.moveTo(x-5,top+hh*.32);c.lineTo(x+w/2,top);c.lineTo(x+w+5,top+hh*.32);c.closePath();c.fill();c.stroke(); // roof
+      c.fillStyle=cols[i];c.beginPath();c.roundRect(x+w*.28,top+hh*.5,w*.44,hh*.5,[6,6,0,0]);c.fill();c.stroke();c.fillStyle="#141414";c.beginPath();c.arc(x+w*.62,top+hh*.78,2.5,0,7);c.fill()} // door
+    const bx=W/2,by=H*.8;
+    if(m.fly){const tx=8+m.fly.to*hw+hw/2,ty=top+hh*.75,e=m.fly.t;bag(bx+(tx-bx)*e,by+(ty-by)*e-Math.sin(e*Math.PI)*40,cols[m.fly.col],1-e*.6)}
+    if(m.phase!=="done")bag(bx,by,cols[m.cur],1.1);
+    for(let i=0;i<3;i++){c.beginPath();c.arc(22+i*20,H-22,7,0,7);c.fillStyle=i<m.miss?"#c8102e":"#ddd";c.fill();c.strokeStyle="#141414";c.lineWidth=1.5;c.stroke()}
+    c.fillStyle="#5d5d66";c.font="15px 'Patrick Hand',cursive";c.textAlign="left";c.fillText("wrong doors",84,H-17);
   }
   if(m.type==="lift"){
     c.fillStyle="#c8102e";c.fillRect(8,84,(W-16)*Math.max(0,1-(m.phase==="play"?m.t/m.limit:0)),6);
