@@ -141,7 +141,7 @@ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 .spot.mine{background:var(--yellow);border:3px solid var(--ink);transform:rotate(4deg)}
 .spot.mine img{width:86%}
 .spot .bar{position:absolute;left:6px;right:6px;bottom:5px;height:7px;background:var(--red);transform-origin:left;border-radius:3px}
-.gcan{display:block;width:100%;height:min(62vh,520px);border:3px solid var(--ink);border-radius:6px;background:#8d8f93;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;box-shadow:1px 5px 9px #35291830}
+.gcan{display:block;box-sizing:border-box;width:100%;height:clamp(300px,calc(100vh - 370px),800px);height:clamp(300px,calc(100dvh - 370px),800px);border:3px solid #a38e5e;border-radius:5px;background:#394c40;image-rendering:pixelated;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
 .gq{min-height:96px;display:flex;flex-direction:column;gap:8px;justify-content:center}
 .dots{display:flex;flex-wrap:wrap;gap:9px}
 .dots i{width:20px;height:16px;border-radius:50% 40% 55% 45%;background:var(--red);border:2px solid var(--ink)}

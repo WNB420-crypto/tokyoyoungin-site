@@ -190,19 +190,22 @@ const GW={w:1120,h:980}, PSPEED=165, REACH=58, PTS={snatch:3,post:1,help:5,miss:
 const BLDG=[[80,80,280,220,"#c96b52"],[440,80,240,220,"#b9895a"],[760,80,280,220,"#c96b52"],[80,400,280,200,"#a8785e"],[440,400,240,200,"#c96b52"],[760,400,280,200,"#b9895a"],[80,700,280,200,"#c96b52"],[440,700,240,200,"#a8785e"],[760,700,280,200,"#c96b52"]];
 const NPC_AT=[[720,350],[400,650],[720,650],[1080,500],[400,40],[40,650]], NPC_COL=["#ff1e9c","#2456d6","#237a45"], MINIS=["catch","cups","horns"];
 const G={on:false,last:null}, IMG={};
+const ASSET_BASE=window.TOKYO_ASSET_BASE||"/img/";
+function gAssets(){gImg("detective",ASSET_BASE+"detective.png");for(let i=1;i<=5;i++)gImg("hater"+i,ASSET_BASE+"hater-"+i+".png");for(let i=0;i<10;i++)gImg("logo"+i,ASSET_BASE+"logo-"+i+".png")}
 const pick=a=>a[Math.floor(Math.random()*a.length)], shuffle=a=>a.map(x=>[Math.random(),x]).sort((p,q)=>p[0]-q[0]).map(x=>x[1]);
 function gImg(k,src){if(!IMG[k]){IMG[k]=new Image();IMG[k].src=src}return IMG[k]}
-function gSpots(){const s=[];BLDG.forEach((b,i)=>{const r=Math.floor(i/3);if(r<2)s.push({x:b[0]+b[2]*.5,y:b[1]+b[3],side:"s"});if(r>0&&i%2===0)s.push({x:b[0]+b[2]*.3,y:b[1],side:"n"});if(i%3<2&&i%2===1)s.push({x:b[0]+b[2],y:b[1]+b[3]*.5,side:"e"})});return s.map(o=>({...o,s:"empty",age:0}))}
+function gSpots(){const s=[];BLDG.forEach((b,i)=>{const r=Math.floor(i/3);if(r<2)s.push({x:b[0]+b[2]*.5,y:b[1]+b[3],side:"s"});if(r>0&&i%2===0)s.push({x:b[0]+b[2]*.3,y:b[1],side:"n"});if(i%3<2&&i%2===1)s.push({x:b[0]+b[2],y:b[1]+b[3]*.5,side:"e"})});return s.map((o,i)=>({...o,s:i<3?"mine":"empty",logo:i%10,age:0}))}
 async function gStart(){
   if(!paid()||G.on||G.starting)return;G.starting=true;
   try{const r=await api("gameStart");S.me.day.shifts++;
     Object.assign(G,{on:true,id:r.id,t:0,cred:0,heat:0,supply:6,spots:gSpots(),spawnIn:3,intel:[],ig:false,px:400,py:350,face:1,walk:0,inx:0,iny:0,keys:{},joy:null,act:null,still:0,npcs:[],npcPlan:shuffle(NPC_AT).slice(0,3).map((p,i)=>({at:[10,45,80][i],x:p[0],y:p[1],col:NPC_COL[i],mini:shuffle(MINIS)[0]})),mini:null,flash:null,last_t:0,hudKey:"",btnKey:""});
     const kinds=shuffle(MINIS);G.npcPlan.forEach((n,i)=>n.mini=kinds[i]); // one of each mini-game per shift
+    G.logoNext=3;G.haterNext=0;G.board=window.innerWidth>700;G.haters=Array.from({length:5},(_,i)=>({id:i+1,x:[40,400,720,1080,40][i],y:[350,40,650,350,940][i],path:[],target:null,posting:0,walk:0}));
     render();gMount();
   }finally{G.starting=false}
 }
 function gMount(){
-  const c=$("#gcan");if(!c)return;gImg("badge","/img/badge.png");gImg("brick","/img/brick-wall.jpg");
+  const c=$("#gcan");if(!c)return;gAssets();
   const fit=()=>{const r=c.getBoundingClientRect(),d=Math.min(2,window.devicePixelRatio||1);G.W=Math.round(r.width);G.H=Math.round(r.height);c.width=G.W*d;c.height=G.H*d;G.dpr=d};fit();G.fit=fit;window.addEventListener("resize",fit);
   const pos=e=>{const r=c.getBoundingClientRect();return {x:e.clientX-r.left,y:e.clientY-r.top}};
   c.onpointerdown=e=>{e.preventDefault();try{c.setPointerCapture(e.pointerId)}catch(x){}const p=pos(e);if(G.mini)return miniDown(p);G.joy={id:e.pointerId,ox:p.x,oy:p.y,x:p.x,y:p.y}};
@@ -235,12 +238,12 @@ function gStep(dt){
   const nx=G.px+ix*PSPEED*dt,ny=G.py+iy*PSPEED*dt;if(!blocked(nx,G.py))G.px=nx;if(!blocked(G.px,ny))G.py=ny;
   // actions take a moment and cancel if he walks off
   if(G.act){const d=Math.hypot(G.act.o.x-G.px,G.act.o.y-G.py),o=G.act.o;if(d>REACH+10||(G.act.type==="snatch"&&o.s!=="hate")||(G.act.type==="post"&&o.s!=="empty"))G.act=null;
-    else{G.act.t+=dt;if(G.act.t>=G.act.need){if(G.act.type==="snatch"){o.s="empty";o.age=0;G.cred+=PTS.snatch;G.flash={text:"+"+PTS.snatch,x:o.x,y:o.y,t:0,ok:true}}else{o.s="mine";o.age=0;G.supply--;G.cred+=PTS.post;G.flash={text:"+"+PTS.post,x:o.x,y:o.y,t:0,ok:true}}G.act=null}}}
+    else{G.act.t+=dt;if(G.act.t>=G.act.need){if(G.act.type==="snatch"){o.s="empty";o.age=0;G.cred+=PTS.snatch;G.flash={text:"+"+PTS.snatch,x:o.x,y:o.y,t:0,ok:true}}else{o.s="mine";o.logo=G.logoNext++%10;o.age=0;G.supply--;G.cred+=PTS.post;G.flash={text:"+"+PTS.post,x:o.x,y:o.y,t:0,ok:true}}G.act=null}}}
   else if(G.still>.45){const t=gTarget();if(t&&t.type!=="help")gAct()} // standing next to a poster starts on it by itself
   // hate posters go up slowly and stay a good while
   G.spots.forEach(s=>{s.age+=dt;if(s.s==="hate"&&s.age>=HATE_LIFE){s.s="empty";s.age=0;G.cred+=PTS.miss;G.heat++;G.flash={text:String(PTS.miss),x:s.x,y:s.y,t:0,ok:false}}});
   if(G.heat>=3){G.ig=true;G.cred+=PTS.ig;return gEnd()}
-  G.spawnIn-=dt;if(G.spawnIn<=0){let c=G.spots.filter(s=>s.s==="empty");if(!c.length)c=G.spots.filter(s=>s.s==="mine"&&s.age>20);if(c.length){const s=pick(c);s.s="hate";s.age=0}G.spawnIn=9}
+  G.spawnIn-=dt;if(G.spawnIn<=0){gDispatchHater();G.spawnIn=9}gHaterStep(dt);
   // strangers show up one at a time and wait a while
   while(G.npcPlan.length&&G.t>=G.npcPlan[0].at){const n=G.npcPlan.shift();G.npcs.push({...n,left:38,done:false})}
   G.npcs.forEach(n=>{if(!n.done){n.left-=dt;if(n.left<=0)n.done=true}});
@@ -254,41 +257,53 @@ function gHud(){
   if(bk!==G.btnKey){G.btnKey=bk;const b=$("#gact");if(b){b.disabled=!t||!!G.act;b.textContent=G.mini?"Help them out":G.act?(G.act.type==="snatch"?"Snatching…":"Posting…"):t?{snatch:"Snatch it down",post:"Put a poster up",help:"Help this stranger"}[t.type]:"Walk up to a wall or a stranger"}}
 }
 /* ---- drawing ---- */
-function person(c,x,y,col,o){ // a little doodle person; o.hat for the detective
-  const bob=o.moving?Math.sin(o.walk)*2.2:0;c.save();c.translate(x,y);
-  c.fillStyle="rgba(0,0,0,.18)";c.beginPath();c.ellipse(0,15,14,5,0,0,7);c.fill();
-  c.lineWidth=2.5;c.strokeStyle="#141414";
-  if(o.moving){c.beginPath();c.moveTo(-5,8);c.lineTo(-5-Math.sin(o.walk)*5,17);c.moveTo(5,8);c.lineTo(5+Math.sin(o.walk)*5,17);c.stroke()}
-  c.fillStyle=col;c.beginPath();c.roundRect(-11,-8+bob,22,22,7);c.fill();c.stroke();
-  c.fillStyle="#fffdf6";c.beginPath();c.arc(0,-16+bob,9.5,0,7);c.fill();c.stroke();
-  c.fillStyle="#141414";const f=o.face||1;c.beginPath();c.arc(3*f-3,-17+bob,1.4,0,7);c.arc(3*f+3,-17+bob,1.4,0,7);c.fill();
-  if(o.hat){c.fillStyle="#141414";c.beginPath();c.ellipse(0,-23+bob,14,3.6,0,0,7);c.fill();c.beginPath();c.roundRect(-8,-33+bob,16,11,3);c.fill();c.fillStyle="#fdb913";c.fillRect(-8,-26+bob,16,2.5)}
-  c.restore();
+function person(c,x,y,col,o={}){
+ const im=IMG[o.hat?'detective':o.hater?'hater'+o.hater:''];
+ const bob=o.moving?Math.sin(o.walk)*1.5:0;c.save();c.translate(x,y);
+ c.fillStyle='rgba(14,25,23,.25)';c.beginPath();c.ellipse(0,9,14,5,0,0,7);c.fill();
+ if(im&&im.complete&&im.naturalWidth){const h=o.hat?72:66,w=h*im.naturalWidth/im.naturalHeight;c.imageSmoothingEnabled=false;c.drawImage(im,-w/2,10-h+bob,w,h)}
+ else {c.fillStyle=col;c.fillRect(-9,-18,18,27);c.fillStyle='#9a623f';c.fillRect(-7,-32,14,14);c.fillStyle='#182c29';c.fillRect(-9,5,7,9);c.fillRect(2,5,7,9)}c.restore();
 }
+const LANEX=[40,400,720,1080], LANEY=[40,350,650,940];
+function gApproach(s){return {x:s.x+(s.side==='e'?32:0),y:s.y+(s.side==='s'?32:s.side==='n'?-32:0)}}
+function gRoute(h,end){
+ const nodes=LANEY.flatMap(y=>LANEX.map(x=>({x,y}))),nearest=p=>nodes.reduce((best,n,i)=>Math.hypot(n.x-p.x,n.y-p.y)<Math.hypot(nodes[best].x-p.x,nodes[best].y-p.y)?i:best,0);
+ const start=nearest(h),goal=nearest(end),q=[start],prev={[start]:null};
+ while(q.length){let v=q.shift();if(v===goal)break;for(const n of [v%4? v-1:-1,v%4<3?v+1:-1,v>=4?v-4:-1,v<12?v+4:-1])if(n>=0&&!(n in prev)){prev[n]=v;q.push(n)}}
+ const route=[];for(let n=goal;n!==null;n=prev[n])route.unshift(nodes[n]);
+ const last=nodes[goal];if(end.x!==last.x&&end.y!==last.y)route.push({x:end.x,y:last.y});route.push(end);return route;
+}
+function gDispatchHater(){
+ const h=G.haters[G.haterNext++%5];if(h.target)return;
+ let options=G.spots.filter(s=>!s.claim&&s.s==='empty');if(!options.length)options=G.spots.filter(s=>!s.claim&&s.s==='mine'&&s.age>20);if(!options.length)return;
+ const s=pick(options);s.claim=h.id;h.target=s;h.path=gRoute(h,gApproach(s));h.posting=0;
+}
+function gHaterStep(dt){for(const h of G.haters){
+ if(!h.target)continue;
+ if(h.path.length){const p=h.path[0],dx=p.x-h.x,dy=p.y-h.y,d=Math.hypot(dx,dy),step=125*dt;h.walk+=dt*9;if(d<=step){h.x=p.x;h.y=p.y;h.path.shift()}else{h.x+=dx/d*step;h.y+=dy/d*step}}
+ else {h.posting+=dt;if(h.posting>=1.2){const s=h.target;s.s='hate';s.logo=(h.id+G.logoNext++)%10;s.age=0;s.claim=null;h.target=null;h.posting=0}}
+}}
 function posterAt(c,s,t){ // posters sit on the wall edge
-  const w=34,h=44;let x=s.x-w/2,y=s.y-h/2;if(s.side==="s")y=s.y-h+8;if(s.side==="n")y=s.y-8;if(s.side==="e")x=s.x-w+8;
+  const w=48,h=56;let x=s.x-w/2,y=s.y-h/2;if(s.side==="s")y=s.y-h+8;if(s.side==="n")y=s.y-8;if(s.side==="e")x=s.x-w+8;
   c.save();c.translate(x+w/2,y+h/2);
   if(s.s==="empty"){c.setLineDash([5,4]);c.lineWidth=2;c.strokeStyle="rgba(255,255,255,.9)";c.fillStyle="rgba(255,255,255,.16)";c.beginPath();c.rect(-w/2,-h/2,w,h);c.fill();c.stroke();c.setLineDash([])}
   else{c.rotate(s.s==="hate"?-.07:.06);c.fillStyle="rgba(0,0,0,.3)";c.fillRect(-w/2+2,-h/2+3,w,h);c.fillStyle=s.s==="hate"?"#fffdf4":"#fdb913";c.fillRect(-w/2,-h/2,w,h);c.lineWidth=1.5;c.strokeStyle="#141414";c.strokeRect(-w/2,-h/2,w,h);
-    if(s.s==="hate"){c.strokeStyle="#c8102e";c.lineWidth=3.5;c.beginPath();c.arc(0,-3,10,0,7);c.moveTo(-7,-10);c.lineTo(7,4);c.stroke();c.fillStyle="#c8102e";c.font="bold 9px sans-serif";c.textAlign="center";c.fillText("BAN",0,18)}
-    else if(IMG.badge&&IMG.badge.complete&&IMG.badge.naturalWidth)c.drawImage(IMG.badge,-14,-14,28,28)}
+    const im=IMG['logo'+(s.logo||0)];c.fillStyle='#fffdf4';c.fillRect(-w/2+3,-h/2+3,w-6,h-6);
+    if(im&&im.complete&&im.naturalWidth){const scale=Math.min((w-8)/im.naturalWidth,(h-17)/im.naturalHeight);c.drawImage(im,-im.naturalWidth*scale/2,-h/2+6,im.naturalWidth*scale,im.naturalHeight*scale)}
+    c.font='bold 7px monospace';c.textAlign='center';c.fillStyle=s.s==='hate'?'#b5263b':'#176746';c.fillText(s.s==='hate'?'HATER POST':'TOKYOYOUNGIN',0,h/2-5);
+    if(s.s==='hate'){c.strokeStyle='#d53345';c.lineWidth=3;c.beginPath();c.moveTo(-17,-16);c.lineTo(17,14);c.stroke()}}
+
   c.restore();
   if(s.s==="hate"){const left=1-s.age/HATE_LIFE,warn=left<.3&&Math.floor(t*4)%2;c.lineWidth=5;c.strokeStyle="rgba(20,20,20,.25)";c.beginPath();c.arc(x+w/2,y+h/2,31,0,7);c.stroke();c.strokeStyle=warn?"#ffdd00":"#c8102e";c.beginPath();c.arc(x+w/2,y+h/2,31,-Math.PI/2,-Math.PI/2+Math.PI*2*left);c.stroke()}
 }
 function gPaint(){
   const cv=$("#gcan");if(!cv)return;const c=cv.getContext("2d"),W=G.W,H=G.H;c.setTransform(G.dpr,0,0,G.dpr,0,0);
   if(G.mini)return miniPaint(c,W,H);
-  const Z=.78,VW=W/Z,VH=H/Z,cx=Math.max(0,Math.min(GW.w-VW,G.px-VW/2)),cy=Math.max(0,Math.min(GW.h-VH,G.py-VH/2)); // zoomed out a little so more of the block shows
+  const Z=G.board?Math.min(W/GW.w,H/GW.h):.95,VW=W/Z,VH=H/Z,cx=VW>=GW.w?(GW.w-VW)/2:Math.max(0,Math.min(GW.w-VW,G.px-VW/2)),cy=VH>=GW.h?(GW.h-VH)/2:Math.max(0,Math.min(GW.h-VH,G.py-VH/2)); // zoomed out a little so more of the block shows
   c.fillStyle="#d9d4c7";c.fillRect(0,0,W,H);c.save();c.scale(Z,Z);c.translate(-cx,-cy);
-  // streets: sidewalk-grey ground with dashed centre lines
-  c.fillStyle="#8d8f93";c.fillRect(0,0,GW.w,GW.h);c.strokeStyle="#f4e9a6";c.lineWidth=3;c.setLineDash([18,16]);
-  [40,400,720,1080].forEach(x=>{c.beginPath();c.moveTo(x,0);c.lineTo(x,GW.h);c.stroke()});[40,350,650,940].forEach(y=>{c.beginPath();c.moveTo(0,y);c.lineTo(GW.w,y);c.stroke()});c.setLineDash([]);
-  if(!G.pat&&IMG.brick&&IMG.brick.complete&&IMG.brick.naturalWidth){try{G.pat=c.createPattern(IMG.brick,"repeat")}catch(e){}}
-  BLDG.forEach(b=>{c.fillStyle="#cfcabd";c.fillRect(b[0]-10,b[1]-10,b[2]+20,b[3]+20); // sidewalk
-    c.fillStyle=G.pat||b[4];c.fillRect(b[0],b[1],b[2],b[3]);c.fillStyle=b[4];c.globalAlpha=G.pat?.35:1;c.fillRect(b[0],b[1],b[2],b[3]);c.globalAlpha=1;
-    c.fillStyle="rgba(20,20,20,.5)";c.fillRect(b[0]+16,b[1]+16,b[2]-32,b[3]-32);c.fillStyle="#5d5f66";c.fillRect(b[0]+20,b[1]+20,b[2]-40,b[3]-40); // flat roof
-    c.lineWidth=3;c.strokeStyle="#141414";c.strokeRect(b[0],b[1],b[2],b[3])});
+  c.imageSmoothingEnabled=false;gQuarter(c);
   G.spots.forEach(s=>posterAt(c,s,G.t));
+  G.haters.forEach(h=>{person(c,h.x,h.y,"#ad3545",{hater:h.id,moving:h.path.length>0,walk:h.walk});c.font="bold 9px monospace";c.textAlign="center";c.fillStyle="#fff5dc";c.fillRect(h.x-25,h.y+14,50,13);c.fillStyle="#8c2435";c.fillText("HATER "+h.id,h.x,h.y+24);if(h.target&&!h.path.length){c.fillStyle="#f0bb48";c.fillRect(h.x+12,h.y-35,12,17);c.fillStyle="#d53345";c.fillRect(h.x-20,h.y-66,40*h.posting/1.2,4)}});
   G.npcs.forEach(n=>{if(n.done)return;person(c,n.x,n.y,n.col,{});const by=n.y-52+Math.sin(G.t*4)*3;c.fillStyle="#fff";c.strokeStyle="#141414";c.lineWidth=2.5;c.beginPath();c.arc(n.x,by,12,0,7);c.fill();c.stroke();c.fillStyle="#c8102e";c.font="bold 18px sans-serif";c.textAlign="center";c.fillText("!",n.x,by+6);
     c.strokeStyle=n.left<10?"#c8102e":"#2456d6";c.lineWidth=3;c.beginPath();c.arc(n.x,by,16,-Math.PI/2,-Math.PI/2+Math.PI*2*Math.max(0,n.left/38));c.stroke()});
   const tg=G.act?G.act.o:(gTarget()||{}).o;if(tg){c.strokeStyle="#fff";c.lineWidth=3;c.setLineDash([6,5]);c.beginPath();c.arc(tg.x,tg.y,38+Math.sin(G.t*6)*2,0,7);c.stroke();c.setLineDash([])}
@@ -302,6 +317,52 @@ function gPaint(){
   G.spots.forEach(s=>{if(s.s==="hate")arrow(s,"#c8102e","✕")});G.npcs.forEach(n=>{if(!n.done)arrow(n,"#2456d6","!")});
   if(G.joy){c.globalAlpha=.55;c.strokeStyle="#fff";c.lineWidth=3;c.beginPath();c.arc(G.joy.ox,G.joy.oy,46,0,7);c.stroke();const dx=G.joy.x-G.joy.ox,dy=G.joy.y-G.joy.oy,m=Math.max(1,Math.hypot(dx,dy)),k=Math.min(46,m)/m;c.fillStyle="#141414";c.beginPath();c.arc(G.joy.ox+dx*k,G.joy.oy+dy*k,20,0,7);c.fill();c.globalAlpha=1}
 }
+// Stylized French Quarter board; original collision footprints remain unchanged.
+function gQuarter(c){
+ if(!G.quarter){const map=document.createElement('canvas');map.width=GW.w;map.height=GW.h;const p=map.getContext('2d');
+ const rect=(x,y,w,h,col)=>{p.fillStyle=col;p.fillRect(x,y,w,h)},text=(s,x,y,col='#f9ebc8',size=11)=>{p.fillStyle=col;p.font='bold '+size+'px monospace';p.textAlign='center';p.fillText(s,x,y)};
+ rect(0,0,GW.w,GW.h,'#626f6a');
+ // Cobblestone lanes and stone joints, rendered once rather than every frame.
+ for(let y=0;y<GW.h;y+=13)for(let x=0;x<GW.w;x+=24){const n=(x*17+y*31)%5;rect(x+(y%26?12:0),y,22,11,['#64736d','#6b7870','#69756f','#737d73','#5e6e69'][n])}
+ [350,650].forEach(y=>[400,720].forEach(x=>{for(let k=-3;k<4;k++){rect(x-30,y+k*9,60,4,'#bdbaa1')}}));
+ const palettes=['#c98c78','#c8b171','#91ad9f','#c4a2aa','#839b7e','#d9ad75','#91a4b0','#bd9270','#b4b69a'];
+ const names=['BOURBON JAZZ','ROYAL ANTIQUES','CREOLE COURT','MAISON TOKYO','JACKSON GARDEN','CHARTRES CAFE','VOODOO RECORDS','ST. LOUIS HOUSE','FRENCH MARKET'];
+ BLDG.forEach((b,i)=>{const [x,y,w,h]=b;
+ rect(x-14,y-14,w+28,h+28,'#b8b29a');rect(x-10,y-10,w+20,h+20,'#ded3b8');
+ for(let k=0;k<w;k+=20)rect(x+k,y+h+3,1,9,'#a99d86');
+ rect(x+6,y+7,w,h,'#354b44');rect(x,y,w,h,palettes[i]);rect(x,y,w,7,'#f1dfbc');
+ if(i===4){
+ rect(x+9,y+10,w-18,h-20,'#365f49');rect(x+w/2-15,y+10,30,h-20,'#d8c8a4');rect(x+9,y+h/2-13,w-18,26,'#d8c8a4');
+ for(const dx of [36,w-36])for(const dy of [35,h-35]){rect(x+dx-16,y+dy-15,32,30,'#244a38');rect(x+dx-11,y+dy-20,25,32,'#56815b');rect(x+dx-7,y+dy-17,10,8,'#76996a')}
+ p.fillStyle='#9ea99b';p.beginPath();p.arc(x+w/2,y+h/2,29,0,7);p.fill();p.fillStyle='#70b6b1';p.beginPath();p.arc(x+w/2,y+h/2,21,0,7);p.fill();rect(x+w/2-4,y+h/2-17,8,23,'#ede5cb');
+ }else{
+ rect(x+10,y+12,w-20,h-68,'#485b58');rect(x+16,y+18,w-32,h-80,'#687775');
+ for(let ry=y+22;ry<y+h-67;ry+=12)rect(x+16,ry,w-32,2,'#536764');
+ // Tiny courtyard cutouts with foliage and warm paving.
+ rect(x+w/2-35,y+30,70,h-108,'#c9ba93');rect(x+w/2-25,y+40,50,h-128,'#54795a');
+ for(let wx=x+22;wx<x+w-24;wx+=47){
+ rect(wx-5,y+h-58,31,40,'#56736a');rect(wx,y+h-57,21,34,'#203e39');rect(wx+4,y+h-53,13,23,'#efc875');rect(wx+10,y+h-53,2,25,'#283f36');
+ rect(wx-5,y+h-18,31,3,'#efdfb7');
+ }
+ // Wrought-iron gallery railings.
+ rect(x+8,y+h-30,w-16,4,'#203a34');rect(x+8,y+h-12,w-16,3,'#203a34');
+ for(let bx=x+10;bx<x+w-10;bx+=9){rect(bx,y+h-30,2,20,'#203a34');rect(bx+3,y+h-23,3,3,'#203a34')}
+ rect(x+w/2-18,y+h-14,36,14,'#25463e');
+ }
+ rect(x+18,y+16,w-36,20,'#203c36');text(names[i],x+w/2,y+30,'#f0d99e',11);
+ // Gas lamps on every corner and flower planters.
+ for(const dx of [-6,w+6]){rect(x+dx-2,y+h+7,4,17,'#263c34');rect(x+dx-5,y+h,10,11,'#263c34');rect(x+dx-3,y+h+2,6,6,'#f4ce76')}
+ rect(x+12,y+h-10,30,8,'#74543d');rect(x+14,y+h-14,26,6,'#3b704e');rect(x+17,y+h-16,5,4,'#c46c8d');rect(x+29,y+h-16,5,4,'#e8b45e');
+ });
+ // Blue-and-white tiled street plaques.
+ ['BOURBON ST','ROYAL ST','CHARTRES ST','DECATUR ST'].forEach((name,i)=>{p.save();p.translate(LANEX[i],500);p.rotate(-Math.PI/2);rect(-54,-9,108,18,'#eee4c9');text(name,0,4,'#244f64',11);p.restore()});
+ ['ST. PETER','ST. ANN','DUMAINE','ESPLANADE'].forEach((name,i)=>{rect(500,LANEY[i]-8,120,18,'#254d46');text(name,560,LANEY[i]+5,'#e6dcc3',11)});
+ // Decorative river edge at the bottom; all paths remain traversable.
+ rect(0,968,1120,12,'#387981');for(let x=0;x<1120;x+=32)rect(x,972,19,2,'#81b8b2');
+ G.quarter=map}
+ c.drawImage(G.quarter,0,0);
+}
+
 /* ---- side quests: three things to do with your hands, drawn not written ---- */
 function miniStart(n){
   n.done=true;G.joy=null;G.act=null;const m={type:n.mini,col:n.col,t:0,phase:"intro",res:null,px:G.W/2};
@@ -397,9 +458,10 @@ function renderGame(){
    <div class="stage"><div><h2>The streets need intel</h2><p style="margin-top:8px">Members play as Detective Tokyo and earn points toward discounts and free merch.</p></div></div>
    <div><button class="btn pink" data-a="go" data-to="join">Join for ${money(S.price)} to play</button></div>${rules}${rewardsHtml(false)}${earnHtml()}`;
   if(G.on)return `<div class="row" style="justify-content:space-between"><h1 style="transform:rotate(-2deg);font-size:24px">On the case</h1><div class="row" id="ghud" style="gap:6px"></div></div>
+   <div class="row" style="justify-content:space-between"><span class="soft" style="letter-spacing:1px">FRENCH QUARTER</span><button class="btn white sm" id="gboard" data-a="gBoard">${G.board?"Follow Tokyo":"Full board"}</button></div>
    <canvas id="gcan" class="gcan" aria-label="Detective Tokyo game. Drag to walk, or use the arrow keys and the space bar."></canvas>
    <div><button class="btn red" id="gact" data-a="gAct" style="width:100%" disabled>Walk up to a wall or a stranger</button></div>
-   <p class="soft">Drag on the street to walk. Red arrows point to hate posters, blue ones to strangers.</p>`;
+   <p class="soft">Drag on the street to walk. Red arrows point to hate posters, blue ones to strangers. Watch for the five haters walking up to post.</p>`;
   const d=S.me.day, next=[250,500,1000,5000].find(c=>c>S.me.pts)||5000, L=G.last;
   return `<div class="row" style="justify-content:space-between"><h1 style="transform:rotate(-2deg)">Detective Tokyo</h1><span class="stamp pinkc">Members</span></div>
    <div class="sk stack" style="--bg:#fff3c9;transform:rotate(-1.5deg)"><div class="row" style="justify-content:space-between;align-items:flex-end"><div><span class="soft">Your points</span><b style="font-family:var(--display);font-weight:400;font-size:44px;display:block;line-height:1">${num(S.me.pts)}</b></div><span class="soft">${num(S.me.intel)} intel fed to the streets</span></div>
@@ -681,7 +743,7 @@ const A={
  prodDel:async d=>{await api("owner/productDel",{id:+d.id});await refresh();toast("Product deleted")},
  shipped:async d=>{await api("owner/shipped",{id:+d.id});await refresh()},
  saveSocial:async()=>{const b={};for(const k of ["YouTube","Instagram","TikTok","Facebook"])b[k]=$("#soc"+k).value.trim();await api("owner/social",b);await refresh();toast("Links saved")},
- gStart:()=>gStart(), gAct:()=>gAct(),
+ gStart:()=>gStart(), gAct:()=>gAct(), gBoard:(d,el)=>{G.board=!G.board;el.textContent=G.board?"Follow Tokyo":"Full board"},
  redeem:async d=>{await api("redeem",{r:d.r});await refresh();toast(d.r==="sub"?"Done. Your next month is $"+HALF+".":"Reward saved. Pick it at checkout.")}
 };
 document.addEventListener("click",e=>{
