@@ -111,8 +111,12 @@ async function ensureWebhook() {
   const tag = sha(KEY + BASE).slice(0, 16), cur = kv("wh");
   if (cur && cur.tag === tag) return;
   try {
+    // remove this site's older endpoints so Stripe only calls the current address
+    const mine = new Set([new URL(BASE).host, "tokyoyoungin.com", "www.tokyoyoungin.com", process.env.RAILWAY_PUBLIC_DOMAIN, "site-production-85e4.up.railway.app"].filter(Boolean));
+    const list = await stripe("webhook_endpoints?limit=100", null, "GET");
+    for (const w of list.data || []) { let u; try { u = new URL(w.url); } catch (e) { continue; } if (u.pathname === "/stripe/webhook" && mine.has(u.host)) await stripe("webhook_endpoints/" + w.id, null, "DELETE").catch(() => {}); }
     const e = await stripe("webhook_endpoints", { url: BASE + "/stripe/webhook", enabled_events: ["checkout.session.completed", "customer.subscription.updated", "customer.subscription.deleted"] });
-    setkv("wh", { tag, secret: e.secret, id: e.id }); console.log("stripe webhook registered");
+    setkv("wh", { tag, secret: e.secret, id: e.id }); console.log("stripe webhook registered for " + BASE);
   } catch (e) { console.error("could not register stripe webhook:", e.message); }
 }
 function verifyStripe(raw, header) {
