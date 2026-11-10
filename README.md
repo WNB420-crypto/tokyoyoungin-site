@@ -1,7 +1,7 @@
 # TokyoYoungin site
 
-Node server with no npm dependencies (node:http, node:sqlite, Stripe over fetch).
+Runs on Bun with no npm dependencies. Postgres holds the data (Bun's built-in client), a volume holds uploaded videos and pictures, Stripe is called over fetch.
 
-Variables: `OWNER_EMAIL`, `OWNER_PASSWORD`, `STRIPE_SECRET_KEY` (optional until payments open), `PUBLIC_URL` (set when a custom domain is attached), `DATA_DIR` (volume path for the database and uploads).
+Variables: `DATABASE_URL`, `DATA_DIR` (volume path for uploads), `OWNER_EMAIL` / `OWNER_PASSWORD` and `ADMIN_EMAIL` / `ADMIN_PASSWORD` (starter owner logins), `STRIPE_SECRET_KEY`, `PUBLIC_URL`.
 
-Start: `npm start`
+Start: `bun server.js`

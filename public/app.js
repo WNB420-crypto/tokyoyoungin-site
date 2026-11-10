@@ -49,7 +49,13 @@ function embedSrc(url,pl){let m;
   if(pl==="Facebook")return "https://www.facebook.com/plugins/video.php?show_text=false&href="+encodeURIComponent(url);
   return null}
 function shrink(file,max){return new Promise((ok,bad)=>{const fr=new FileReader();fr.onerror=()=>bad(new Error("That picture could not be read. Try a JPG or PNG."));fr.onload=()=>{const im=new Image();im.onerror=()=>bad(new Error("That picture could not be read. Try a JPG or PNG."));im.onload=()=>{const k=Math.min(1,max/Math.max(im.width,im.height)),c=document.createElement("canvas");c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);c.getContext("2d").drawImage(im,0,0,c.width,c.height);c.toBlob(b=>b?ok(b):bad(new Error("That picture could not be read.")),"image/jpeg",.82)};im.src=fr.result};fr.readAsDataURL(file)})}
-function upload(blob,ext,onPct){return new Promise((ok,bad)=>{const x=new XMLHttpRequest();x.open("PUT","/api/owner/upload?ext="+encodeURIComponent(ext));x.upload.onprogress=e=>{if(e.lengthComputable&&onPct)onPct(Math.round(100*e.loaded/e.total))};x.onload=()=>{let j={};try{j=JSON.parse(x.responseText)}catch(e){}x.status===200?ok(j.file):bad(new Error(j.error||"The upload failed. Try again."))};x.onerror=()=>bad(new Error("The upload was cut off. Check your connection and try again."));x.send(blob)})}
+async function upload(blob,ext,onPct){ // sent in 8 MB pieces so big videos survive a shaky connection
+  const CH=8*1024*1024;let file="",sent=0;
+  do{const part=blob.slice(sent,sent+CH),q=(file?"file="+file:"ext="+encodeURIComponent(ext))+"&offset="+sent;let j,tries=0;
+    for(;;){try{const r=await fetch("/api/owner/upload?"+q,{method:"PUT",body:part});j=await r.json().catch(()=>({}));if(!r.ok)throw Object.assign(new Error(j.error||"The upload failed. Try again."),{fatal:r.status<500});break}
+      catch(e){if(e.fatal)throw e;if(++tries>=4)throw new Error("The upload was cut off. Check your connection and try again.");await new Promise(r=>setTimeout(r,1500))}}
+    file=j.file;sent+=part.size;if(onPct)onPct(blob.size?Math.min(100,Math.round(100*sent/blob.size)):100)}while(sent<blob.size);
+  return file}
 async function uploadPic(input,max){const f=input&&input.files[0];if(!f)return null;return upload(await shrink(f,max),"jpg")}
 const postById=id=>S.posts.find(p=>p.id===id);
 
