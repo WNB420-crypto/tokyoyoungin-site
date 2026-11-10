@@ -191,7 +191,7 @@ const BLDG=[[80,80,280,220,"#c96b52"],[440,80,240,220,"#b9895a"],[760,80,280,220
 const NPC_AT=[[720,350],[400,650],[720,650],[1080,500],[400,40],[40,650]], NPC_COL=["#ff1e9c","#2456d6","#237a45"], MINIS=["catch","cups","horns"];
 const G={on:false,last:null}, IMG={};
 const ASSET_BASE=window.TOKYO_ASSET_BASE||"/img/";
-function gAssets(){gImg("detective",ASSET_BASE+"detective.png");for(let i=1;i<=5;i++)gImg("hater"+i,ASSET_BASE+"hater-"+i+".png");for(let i=0;i<10;i++)gImg("logo"+i,ASSET_BASE+"logo-"+i+".png");for(let i=1;i<=5;i++)gImg("stranger"+i,ASSET_BASE+"stranger-"+i+".png");for(let i=0;i<4;i++){gImg("wbag"+i,ASSET_BASE+"wnb-bag-"+i+".png");gImg("whome"+i,ASSET_BASE+"wnb-home-"+i+".png");gImg("bullhorn"+i,ASSET_BASE+"bullhorn-"+i+".png")}}
+function gAssets(){gImg("detective",ASSET_BASE+"detective.png");for(let i=1;i<=5;i++)gImg("hater"+i,ASSET_BASE+"hater-"+i+".png");for(let i=0;i<10;i++)gImg("logo"+i,ASSET_BASE+"logo-"+i+".png");for(let i=1;i<=5;i++)gImg("stranger"+i,ASSET_BASE+"stranger-"+i+".png");for(let i=0;i<4;i++){gImg("wbag"+i,ASSET_BASE+"wnb-bag-"+i+".png");gImg("whome"+i,ASSET_BASE+"wnb-home-"+i+".png");gImg("bullhorn"+i,ASSET_BASE+"bullhorn-"+i+".png?v=2")}}
 const pick=a=>a[Math.floor(Math.random()*a.length)], shuffle=a=>a.map(x=>[Math.random(),x]).sort((p,q)=>p[0]-q[0]).map(x=>x[1]);
 function gImg(k,src){if(!IMG[k]){IMG[k]=new Image();IMG[k].src=src}return IMG[k]}
 function gSpots(){const s=[];BLDG.forEach((b,i)=>{const r=Math.floor(i/3);if(r<2)s.push({x:b[0]+b[2]*.5,y:b[1]+b[3],side:"s"});if(r>0&&i%2===0)s.push({x:b[0]+b[2]*.3,y:b[1],side:"n"});if(i%3<2&&i%2===1)s.push({x:b[0]+b[2],y:b[1]+b[3]*.5,side:"e"})});return s.map((o,i)=>({...o,s:i<3?"mine":"empty",logo:i%10,age:0}))}
