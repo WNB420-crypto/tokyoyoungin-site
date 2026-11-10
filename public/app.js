@@ -191,7 +191,7 @@ const BLDG=[[80,80,280,220,"#c96b52"],[440,80,240,220,"#b9895a"],[760,80,280,220
 const NPC_AT=[[720,350],[400,650],[720,650],[1080,500],[400,40],[40,650]], NPC_COL=["#ff1e9c","#2456d6","#237a45"], MINIS=["catch","cups","horns"];
 const G={on:false,last:null}, IMG={};
 const ASSET_BASE=window.TOKYO_ASSET_BASE||"/img/";
-function gAssets(){gImg("detective",ASSET_BASE+"detective.png");for(let i=1;i<=5;i++)gImg("hater"+i,ASSET_BASE+"hater-"+i+".png");for(let i=0;i<10;i++)gImg("logo"+i,ASSET_BASE+"logo-"+i+".png");for(let i=1;i<=5;i++)gImg("stranger"+i,ASSET_BASE+"stranger-"+i+".png");for(let i=0;i<4;i++){gImg("wbag"+i,ASSET_BASE+"wnb-bag-"+i+".png");gImg("whome"+i,ASSET_BASE+"wnb-home-"+i+".png")}}
+function gAssets(){gImg("detective",ASSET_BASE+"detective.png");for(let i=1;i<=5;i++)gImg("hater"+i,ASSET_BASE+"hater-"+i+".png");for(let i=0;i<10;i++)gImg("logo"+i,ASSET_BASE+"logo-"+i+".png");for(let i=1;i<=5;i++)gImg("stranger"+i,ASSET_BASE+"stranger-"+i+".png");for(let i=0;i<4;i++){gImg("wbag"+i,ASSET_BASE+"wnb-bag-"+i+".png");gImg("whome"+i,ASSET_BASE+"wnb-home-"+i+".png");gImg("bullhorn"+i,ASSET_BASE+"bullhorn-"+i+".png")}}
 const pick=a=>a[Math.floor(Math.random()*a.length)], shuffle=a=>a.map(x=>[Math.random(),x]).sort((p,q)=>p[0]-q[0]).map(x=>x[1]);
 function gImg(k,src){if(!IMG[k]){IMG[k]=new Image();IMG[k].src=src}return IMG[k]}
 function gSpots(){const s=[];BLDG.forEach((b,i)=>{const r=Math.floor(i/3);if(r<2)s.push({x:b[0]+b[2]*.5,y:b[1]+b[3],side:"s"});if(r>0&&i%2===0)s.push({x:b[0]+b[2]*.3,y:b[1],side:"n"});if(i%3<2&&i%2===1)s.push({x:b[0]+b[2],y:b[1]+b[3]*.5,side:"e"})});return s.map((o,i)=>({...o,s:i<3?"mine":"empty",logo:i%10,age:0}))}
@@ -490,7 +490,12 @@ function miniPaint(c,W,H){
   }
   if(m.type==="horns"){
     const cols=["#fdb913","#ff1e9c","#2456d6","#237a45"],top=100,hh=(H-top-12)/2,ww=(W-24)/2;
-    for(let i=0;i<4;i++){const x=8+(i%2)*(ww+8),y=top+Math.floor(i/2)*(hh+4),lit=m.lit===i;c.globalAlpha=lit?1:.42;c.fillStyle=cols[i];c.strokeStyle="#141414";c.lineWidth=3;c.beginPath();c.roundRect(x,y,ww,hh,10);c.fill();c.globalAlpha=1;c.stroke();
+    for(let i=0;i<4;i++){const x=8+(i%2)*(ww+8),y=top+Math.floor(i/2)*(hh+4),lit=m.lit===i,tile=m.skin==="megaphone"?IMG["bullhorn"+i]:null;
+      if(tile&&tile.complete&&tile.naturalWidth){ // the supplied jeweled bullhorn tiles: dim until it is their turn, then bright and bigger
+        const k=Math.min((ww-6)/tile.naturalWidth,(hh-6)/tile.naturalHeight)*(lit?1:.9),w=tile.naturalWidth*k,th=tile.naturalHeight*k;
+        c.imageSmoothingEnabled=false;c.globalAlpha=lit?1:.45;c.drawImage(tile,x+ww/2-w/2,y+hh/2-th/2,w,th);c.globalAlpha=1;
+        if(lit){c.strokeStyle="#141414";c.lineWidth=4;c.strokeRect(x+ww/2-w/2-3,y+hh/2-th/2-3,w+6,th+6)}continue}
+      c.globalAlpha=lit?1:.42;c.fillStyle=cols[i];c.strokeStyle="#141414";c.lineWidth=3;c.beginPath();c.roundRect(x,y,ww,hh,10);c.fill();c.globalAlpha=1;c.stroke();
       const hx=x+ww/2,hy=y+hh/2;c.save();c.translate(hx,hy);if(lit)c.scale(1.18,1.18);c.strokeStyle="#141414";c.fillStyle="#fff7d6";c.lineWidth=3;c.beginPath();c.moveTo(-34,-5);c.lineTo(8,-5);c.lineTo(34,-22);c.lineTo(34,22);c.lineTo(8,5);c.lineTo(-34,5);c.closePath();c.fill();c.stroke();if(m.skin==="megaphone"){c.beginPath();c.roundRect(-20,5,10,22,3);c.fill();c.stroke();c.beginPath();c.arc(40,0,10,-1,1);c.stroke();c.beginPath();c.arc(40,0,18,-.9,.9);c.stroke()}else[-18,-6,6].forEach(v=>{c.beginPath();c.moveTo(v,-5);c.lineTo(v,-15);c.stroke()});c.restore()}
     for(let i=0;i<m.seq.length;i++){c.beginPath();c.arc(W-22-i*18,30,6,0,7);c.fillStyle=i<m.inp?"#237a45":"#ddd";c.fill();c.strokeStyle="#141414";c.lineWidth=1.5;c.stroke()}
   }
