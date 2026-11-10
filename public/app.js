@@ -290,15 +290,21 @@ const partOf=c=>{for(const [k,v] of Object.entries(WORLD))if(v.split(" ").includ
 let regionNames=null;try{regionNames=new Intl.DisplayNames(["en"],{type:"region"})}catch(e){}
 const countryName=c=>{if(!c)return "Not known";try{return (regionNames&&regionNames.of(c))||c}catch(e){return c}};
 function studioPlaces(){
-  const days=new Set(ST.days.slice(-(range===90?91:range))), by={}, parts={};let total=0;
-  (ST.places||[]).forEach(r=>{if(!days.has(r.day))return;by[r.c]=(by[r.c]||0)+r.n;const p=partOf(r.c);parts[p]=(parts[p]||0)+r.n;total+=r.n});
+  const days=new Set(ST.days.slice(-(range===90?91:range))), by={}, parts={}, states={}, cities={};let total=0;
+  (ST.places||[]).forEach(r=>{if(!days.has(r.day))return;by[r.c]=(by[r.c]||0)+r.n;const p=partOf(r.c);parts[p]=(parts[p]||0)+r.n;total+=r.n;
+    if(r.r){const k=r.r+"|"+r.c;states[k]=(states[k]||0)+r.n}
+    if(r.t){const k=r.t+"|"+(r.c==="US"&&r.r?r.r:countryName(r.c));cities[k]=(cities[k]||0)+r.n}});
   const pct=n=>total?Math.round(100*n/total)+"%":"0%", bar=n=>`<div class="meter" style="height:10px;margin-top:3px"><i style="width:${total?100*n/total:0}%;background:var(--pen)"></i></div>`;
   const rows=o=>Object.entries(o).sort((a,b)=>b[1]-a[1]);
+  const tbl=(head,list,label)=>`<div class="tblwrap"><table><tr><th>${head}</th><th class="n">Visitors</th><th class="n">Share</th></tr>${list.map(([k,n])=>`<tr><td>${label(k)}</td><td class="n">${num(n)}</td><td class="n">${pct(n)}</td></tr>`).join("")}</table></div>`;
+  const more=(o,n,what)=>rows(o).length>n?`<p class="soft">Showing the top ${n} of ${rows(o).length} ${what}.</p>`:"";
+  const two=k=>{const [a,b]=k.split("|");return esc(a)+(b?` <span class="soft">${esc(b)}</span>`:"")};
   return `<div class="sk stack" style="transform:rotate(1deg)"><h3>Where visitors come from, last ${range} days</h3>
-   ${total?`<div class="tblwrap"><table><tr><th>Part of the world</th><th class="n">Visitors</th><th class="n">Share</th></tr>${rows(parts).map(([k,n])=>`<tr><td>${esc(k)}${bar(n)}</td><td class="n">${num(n)}</td><td class="n">${pct(n)}</td></tr>`).join("")}</table></div>
-   <div class="tblwrap"><table><tr><th>Country</th><th class="n">Visitors</th><th class="n">Share</th></tr>${rows(by).slice(0,15).map(([c,n])=>`<tr><td>${esc(countryName(c))}</td><td class="n">${num(n)}</td><td class="n">${pct(n)}</td></tr>`).join("")}</table></div>
-   ${rows(by).length>15?`<p class="soft">Showing the top 15 of ${rows(by).length} countries.</p>`:""}`:'<p class="soft">No visitors in this window yet.</p>'}
-   <p class="soft">${ST.geoReady?"":"The country lookup is still loading, so new visits show as not known for now. "}Worked out from each visitor's internet address; only the country is saved. Visits from before this was added show as not known. <a href="https://db-ip.com" target="_blank" rel="noopener">IP Geolocation by DB-IP</a></p></div>`;
+   ${total?`${tbl("Part of the world",rows(parts),k=>esc(k)+bar(parts[k]))}
+   ${tbl("Country",rows(by).slice(0,15),c=>esc(countryName(c)))}${more(by,15,"countries")}
+   ${rows(states).length?tbl("State or region",rows(states).slice(0,15),k=>{const [a,c]=k.split("|");return esc(a)+(c&&c!=="US"?` <span class="soft">${esc(countryName(c))}</span>`:"")})+more(states,15,"states and regions"):""}
+   ${rows(cities).length?tbl("City",rows(cities).slice(0,20),two)+more(cities,20,"cities"):""}`:'<p class="soft">No visitors in this window yet.</p>'}
+   <p class="soft">${ST.cityReady?"":ST.geoReady?"City and state lookup is still loading, so new visits show a country only for now. ":"The location lookup is still loading, so new visits show as not known for now. "}Worked out from each visitor's internet address, so city is approximate and phone networks can show a nearby city. Only the place is saved, never the address. Visits from before this was added show as not known. <a href="https://db-ip.com" target="_blank" rel="noopener">IP Geolocation by DB-IP</a></p></div>`;
 }
 function studioNumbers(){
   const since=Date.now()-range*DAY, visits=series(ST.visits), dons=series(ST.dons), sum=a=>a.reduce((x,y)=>x+y,0);

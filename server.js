@@ -47,6 +47,8 @@ CREATE TABLE IF NOT EXISTS orders(id SERIAL PRIMARY KEY, session TEXT UNIQUE, us
 CREATE TABLE IF NOT EXISTS coupons(id SERIAL PRIMARY KEY, user_id INTEGER, type TEXT, label TEXT, uses INTEGER);
 CREATE TABLE IF NOT EXISTS visits(day TEXT, vid TEXT, hits INTEGER DEFAULT 0, PRIMARY KEY(day, vid));
 ALTER TABLE visits ADD COLUMN IF NOT EXISTS country TEXT;
+ALTER TABLE visits ADD COLUMN IF NOT EXISTS region TEXT;
+ALTER TABLE visits ADD COLUMN IF NOT EXISTS city TEXT;
 CREATE TABLE IF NOT EXISTS shifts(id TEXT PRIMARY KEY, user_id INTEGER, started DOUBLE PRECISION, done INTEGER DEFAULT 0);
 CREATE TABLE IF NOT EXISTS kv(k TEXT PRIMARY KEY, v TEXT);`;
 const TABLES = { // column lists, used to copy the old SQLite file across once
@@ -166,12 +168,57 @@ function buildGeo(text, six) {
   return { S, E, C, n: rows.length };
 }
 function geoFind(t, x) { if (!t || !t.n) return ""; let lo = 0, hi = t.n - 1, at = -1; while (lo <= hi) { const m = (lo + hi) >> 1; if (t.S[m] <= x) { at = m; lo = m + 1; } else hi = m - 1; } return at >= 0 && x <= t.E[at] ? GEO.codes[t.C[at]] : ""; }
-function countryOf(ip) {
+// City and state come from a larger city database, loaded in the background after the country one.
+const CITY = { v4: null, v6: null, places: [] }, CITY_SRC = ["https://cdn.jsdelivr.net/npm/@ip-location-db/dbip-city/", "https://github.com/sapics/ip-location-db/raw/master/dbip-city/"];
+function csvLine(line) {
+  if (!line.includes('"')) return line.split(",");
+  const out = []; let cur = "", q = false;
+  for (let i = 0; i < line.length; i++) { const ch = line[i]; if (q) { if (ch === '"') { if (line[i + 1] === '"') { cur += '"'; i++; } else q = false; } else cur += ch; } else if (ch === '"') q = true; else if (ch === ",") { out.push(cur); cur = ""; } else cur += ch; }
+  out.push(cur); return out;
+}
+async function buildCity(file, six, idx) {
+  const zlib = require("node:zlib"), readline = require("node:readline");
+  let cap = 1 << 20, n = 0, sorted = true, prev = null;
+  let S = six ? new BigUint64Array(cap) : new Float64Array(cap), E = six ? new BigUint64Array(cap) : new Float64Array(cap), P = new Uint32Array(cap);
+  const grow = A => { const B = new A.constructor(cap); B.set(A); return B; };
+  const rl = readline.createInterface({ input: fs.createReadStream(file).pipe(zlib.createGunzip()), crlfDelay: Infinity });
+  for await (const line of rl) {
+    const f = csvLine(line); if (f.length < 6) continue;
+    const s = six ? v6hi(f[0]) : Number(f[0]), e = six ? v6hi(f[1]) : Number(f[1]); if (s === null || e === null || (!six && !(s >= 0 && e >= s))) continue;
+    const cc = f[2].trim().toUpperCase().slice(0, 2), key = cc + "|" + f[3] + "|" + f[5]; let pi = idx.get(key);
+    if (pi === undefined) { pi = CITY.places.length; CITY.places.push([cc, f[3].trim().slice(0, 60), f[5].trim().slice(0, 60)]); idx.set(key, pi); }
+    if (n === cap) { cap *= 2; S = grow(S); E = grow(E); P = grow(P); }
+    S[n] = s; E[n] = e; P[n] = pi; if (prev !== null && s < prev) sorted = false; prev = s; n++;
+  }
+  if (!sorted) { // put the ranges in order if the file was not
+    const ord = new Uint32Array(n); for (let i = 0; i < n; i++) ord[i] = i; ord.sort((a, b) => (S[a] < S[b] ? -1 : S[a] > S[b] ? 1 : 0));
+    const S2 = new S.constructor(n), E2 = new E.constructor(n), P2 = new Uint32Array(n); for (let i = 0; i < n; i++) { S2[i] = S[ord[i]]; E2[i] = E[ord[i]]; P2[i] = P[ord[i]]; } S = S2; E = E2; P = P2;
+  }
+  return { S: S.subarray(0, n), E: E.subarray(0, n), C: P.subarray(0, n), n };
+}
+function cityFind(t, x) { if (!t || !t.n) return null; let lo = 0, hi = t.n - 1, at = -1; while (lo <= hi) { const m = (lo + hi) >> 1; if (t.S[m] <= x) { at = m; lo = m + 1; } else hi = m - 1; } return at >= 0 && x <= t.E[at] ? CITY.places[t.C[at]] : null; }
+async function loadCity() {
+  const idx = new Map(CITY.places.map((p, i) => [p.join("|"), i]));
+  for (const [key, file, six] of [["v4", "dbip-city-ipv4-num.csv.gz", false], ["v6", "dbip-city-ipv6.csv.gz", true]]) {
+    try {
+      const f = path.join(GEO_DIR, file), fresh = fs.existsSync(f) && Date.now() - fs.statSync(f).mtimeMs < 35 * DAY;
+      if (fresh && CITY[key]) continue;
+      if (!fresh) {
+        let ok = false, why = "";
+        for (const src of CITY_SRC) { try { const r = await fetch(src + file); if (!r.ok) { why = "download " + r.status; continue; } await Bun.write(f + ".part", r); if (fs.statSync(f + ".part").size < 1e6) { why = "download looks incomplete"; continue; } fs.renameSync(f + ".part", f); ok = true; break; } catch (e) { why = e.message; } }
+        if (!ok && !fs.existsSync(f)) throw new Error(why);
+      }
+      CITY[key] = await buildCity(f, six, idx); console.log("city lookup ready (" + key + ", " + CITY[key].n + " ranges, " + CITY.places.length + " places)");
+    } catch (e) { console.error("city lookup " + key + " unavailable:", e.message); }
+  }
+}
+// -> [country, state/region, city], any of which may be ""
+function placeOf(ip) {
   try {
     ip = String(ip || "").trim().split("%")[0]; const m = /(\d+\.\d+\.\d+\.\d+)$/.exec(ip);
-    if (m) { const n = v4num(m[1]); return n === null ? "" : geoFind(GEO.v4, n); }
-    const h6 = v6hi(ip); return h6 === null ? "" : geoFind(GEO.v6, h6);
-  } catch (e) { return ""; }
+    if (m) { const n = v4num(m[1]); if (n === null) return ["", "", ""]; return cityFind(CITY.v4, n) || [geoFind(GEO.v4, n), "", ""]; }
+    const h6 = v6hi(ip); if (h6 === null) return ["", "", ""]; return cityFind(CITY.v6, h6) || [geoFind(GEO.v6, h6), "", ""];
+  } catch (e) { return ["", "", ""]; }
 }
 async function loadGeo() {
   fs.mkdirSync(GEO_DIR, { recursive: true });
@@ -189,7 +236,7 @@ async function loadGeo() {
     }
   }
 }
-setInterval(() => loadGeo().catch(() => {}), DAY).unref();
+setInterval(() => loadGeo().then(loadCity).catch(() => {}), DAY).unref();
 
 /* ---------- rate limit ---------- */
 const hits = new Map();
@@ -307,7 +354,7 @@ async function studio() {
   const dd = {}; dons.forEach(d => { const k = dayOf(d.ts); dd[k] = (dd[k] || 0) + d.cents; });
   return {
     days, visits: days.map(d => v[d] || 0), dons: days.map(d => dd[d] || 0), donations: dons,
-    places: await all("SELECT day, COALESCE(country,'') AS c, COUNT(*)::int AS n FROM visits WHERE day>=? GROUP BY day, country", days[0]), geoReady: !!(GEO.v4 || GEO.v6),
+    places: await all("SELECT day, COALESCE(country,'') AS c, COALESCE(region,'') AS r, COALESCE(city,'') AS t, COUNT(*)::int AS n FROM visits WHERE day>=? GROUP BY day, country, region, city ORDER BY n DESC LIMIT 20000", days[0]), geoReady: !!(GEO.v4 || GEO.v6), cityReady: !!(CITY.v4 || CITY.v6),
     reports: await all("SELECT r.id, r.post_id, r.reason, r.details, r.ts, p.title FROM reports r LEFT JOIN posts p ON p.id=r.post_id ORDER BY r.ts DESC"),
     subsFree: await all("SELECT email, ts FROM subs_free ORDER BY ts DESC"),
     subsPaid: await all("SELECT email, created AS ts, sub_status FROM users WHERE paid=1 ORDER BY id DESC"),
@@ -562,7 +609,8 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === "GET" || req.method === "HEAD") {
       if (p === "/" || p === "/index.html") {
-        await run("INSERT INTO visits(day,vid,hits,country) VALUES(?,?,1,?) ON CONFLICT(day,vid) DO UPDATE SET hits=visits.hits+1, country=COALESCE(visits.country, excluded.country)", today(), ctx.vid, countryOf(ctx.ip) || null);
+        const [gc, gr, gcity] = placeOf(ctx.ip);
+        await run("INSERT INTO visits(day,vid,hits,country,region,city) VALUES(?,?,1,?,?,?) ON CONFLICT(day,vid) DO UPDATE SET hits=visits.hits+1, country=COALESCE(visits.country, excluded.country), region=COALESCE(visits.region, excluded.region), city=COALESCE(visits.city, excluded.city)", today(), ctx.vid, gc || null, gr || null, gcity || null);
         return send(res, 200, fs.readFileSync(path.join(PUB, "index.html")), { "Content-Type": STATIC[".html"], "Cache-Control": "no-cache", ...(ctx.set.length ? { "Set-Cookie": ctx.set } : {}) });
       }
       if (p === "/api/state") return json(200, await state(ctx));
@@ -614,5 +662,5 @@ const server = http.createServer(async (req, res) => {
   await seedMerch();
   await priceMerch();
   await renameMerch();
-  server.listen(PORT, () => { console.log("TokyoYoungin site on " + BASE + " · payments " + (KEY ? "on" : "off") + " · Postgres · uploads in " + UP); ensureWebhook(); loadGeo().catch(() => {}); });
+  server.listen(PORT, () => { console.log("TokyoYoungin site on " + BASE + " · payments " + (KEY ? "on" : "off") + " · Postgres · uploads in " + UP); ensureWebhook(); loadGeo().then(loadCity).catch(() => {}); });
 })().catch(e => { console.error("startup failed:", e); process.exit(1); });
