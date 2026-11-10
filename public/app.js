@@ -191,7 +191,7 @@ const BLDG=[[80,80,280,220,"#c96b52"],[440,80,240,220,"#b9895a"],[760,80,280,220
 const NPC_AT=[[720,350],[400,650],[720,650],[1080,500],[400,40],[40,650]], NPC_COL=["#ff1e9c","#2456d6","#237a45"], MINIS=["catch","cups","horns"];
 const G={on:false,last:null}, IMG={};
 const ASSET_BASE=window.TOKYO_ASSET_BASE||"/img/";
-function gAssets(){gImg("detective",ASSET_BASE+"detective.png");for(let i=1;i<=5;i++)gImg("hater"+i,ASSET_BASE+"hater-"+i+".png");for(let i=0;i<10;i++)gImg("logo"+i,ASSET_BASE+"logo-"+i+".png");for(let i=1;i<=5;i++)gImg("stranger"+i,ASSET_BASE+"stranger-"+i+".png");for(let i=0;i<4;i++){gImg("wbag"+i,ASSET_BASE+"wnb-bag-"+i+".png");gImg("whome"+i,ASSET_BASE+"wnb-home-"+i+".png");gImg("bullhorn"+i,ASSET_BASE+"bullhorn-"+i+".png?v=2")}gImg("cmbox",ASSET_BASE+"cm-box.png");gImg("cmrecord",ASSET_BASE+"cm-record.png");gImg("goldbar",ASSET_BASE+"gold-barbell.png")}
+function gAssets(){gImg("detective",ASSET_BASE+"detective.png");for(let i=1;i<=5;i++)gImg("hater"+i,ASSET_BASE+"hater-"+i+".png");for(let i=0;i<10;i++)gImg("logo"+i,ASSET_BASE+"logo-"+i+".png");for(let i=1;i<=5;i++)gImg("stranger"+i,ASSET_BASE+"stranger-"+i+".png");for(let i=0;i<4;i++){gImg("wbag"+i,ASSET_BASE+"wnb-bag-"+i+".png");gImg("whome"+i,ASSET_BASE+"wnb-home-"+i+".png");gImg("bullhorn"+i,ASSET_BASE+"bullhorn-"+i+".png?v=2")}gImg("cmbox",ASSET_BASE+"cm-box.png");gImg("cmrecord",ASSET_BASE+"cm-record.png");gImg("goldbar",ASSET_BASE+"gold-barbell.png");gImg("goldmic",ASSET_BASE+"gold-mic.png");gImg("goldmeter",ASSET_BASE+"gold-meter.png")}
 const pick=a=>a[Math.floor(Math.random()*a.length)], shuffle=a=>a.map(x=>[Math.random(),x]).sort((p,q)=>p[0]-q[0]).map(x=>x[1]);
 function gImg(k,src){if(!IMG[k]){IMG[k]=new Image();IMG[k].src=src}return IMG[k]}
 function gSpots(){const s=[];BLDG.forEach((b,i)=>{const r=Math.floor(i/3);if(r<2)s.push({x:b[0]+b[2]*.5,y:b[1]+b[3],side:"s"});if(r>0&&i%2===0)s.push({x:b[0]+b[2]*.3,y:b[1],side:"n"});if(i%3<2&&i%2===1)s.push({x:b[0]+b[2],y:b[1]+b[3]*.5,side:"e"})});return s.map((o,i)=>({...o,s:i<3?"mine":"empty",logo:i%10,age:0}))}
@@ -370,7 +370,7 @@ const QUEST={
  1:{type:"deliver",title:"Wake & Bake run",sub:"Tap the home that matches each bag"},
  2:{type:"catch",skin:"records",title:"Gold records!",sub:"Slide the box under 6 of them"},
  3:{type:"horns",skin:"megaphone",title:"Say it back!",sub:"Watch, then tap the same order"},
- 4:{type:"meter",title:"Hit the levels!",sub:"Tap when the needle is in the green, 3 times"},
+ 4:{type:"meter",title:"Hit the levels!",sub:"Tap when the lights reach the white box"},
  5:{type:"lift",title:"Spot me!",sub:"Tap fast to finish 12 reps"}};
 function miniStart(n){
   const q=QUEST[n.who]||{type:n.mini};
@@ -430,15 +430,21 @@ function miniPaint(c,W,H){
   if(m.type==="meter"){
     for(let i=0;i<m.need;i++){c.beginPath();c.arc(W-22-i*20,30,7,0,7);c.fillStyle=i<m.got?"#237a45":"#ddd";c.fill();c.strokeStyle="#141414";c.lineWidth=1.5;c.stroke()}
     c.fillStyle="#c8102e";c.fillRect(8,84,(W-16)*Math.max(0,1-(m.phase==="play"?m.t/m.limit:0)),6);
-    const mx=W/2,my=H*.36; // a studio microphone
-    c.strokeStyle="#141414";c.lineWidth=4;c.fillStyle="#8d8f93";c.beginPath();c.roundRect(mx-26,my-52,52,84,26);c.fill();c.stroke();c.lineWidth=2;for(let k=-36;k<=16;k+=13){c.beginPath();c.moveTo(mx-24,my+k);c.lineTo(mx+24,my+k);c.stroke()}
-    c.lineWidth=4;c.beginPath();c.arc(mx,my+10,40,.15*Math.PI,.85*Math.PI);c.stroke();c.beginPath();c.moveTo(mx,my+50);c.lineTo(mx,my+78);c.moveTo(mx-30,my+78);c.lineTo(mx+30,my+78);c.stroke();
-    const bx=28,bw=W-56,by=H*.68,bh=44; // the level meter
-    c.fillStyle="#141414";c.beginPath();c.roundRect(bx-6,by-6,bw+12,bh+12,8);c.fill();c.fillStyle="#3a3d42";c.fillRect(bx,by,bw,bh);
-    c.fillStyle=m.blink>0&&m.hitOk?"#7dffb0":"#237a45";c.fillRect(bx+bw*(m.zone-.12),by,bw*.24,bh);
-    c.fillStyle=m.blink>0&&!m.hitOk?"#ff5a6e":"#fdb913";c.fillRect(bx+bw*m.pos-4,by-10,8,bh+20);c.strokeStyle="#141414";c.lineWidth=2;c.strokeRect(bx+bw*m.pos-4,by-10,8,bh+20);
-    for(let i=0;i<3;i++){c.beginPath();c.arc(bx+10+i*20,by+bh+30,7,0,7);c.fillStyle=i<m.miss?"#c8102e":"#ddd";c.fill();c.strokeStyle="#141414";c.lineWidth=1.5;c.stroke()}
-    c.fillStyle="#5d5d66";c.font="15px 'Patrick Hand',cursive";c.textAlign="left";c.fillText("misses",bx+70,by+bh+35);
+    const mic=IMG.goldmic,mt=IMG.goldmeter,ok=im=>im&&im.complete&&im.naturalWidth;c.imageSmoothingEnabled=false;
+    // the supplied gold microphone on the left
+    if(ok(mic)){const mh=Math.min(H-150,270),mw=mh*mic.naturalWidth/mic.naturalHeight;c.drawImage(mic,W*.27-mw/2,100+(H-150-mh)/2,mw,mh)}
+    // the supplied gold level meter on the right; its 15 lights are redrawn live on top of it
+    const th=H-118,tw=ok(mt)?th*mt.naturalWidth/mt.naturalHeight:th*.48,tx=W*.73-tw/2,ty=100;
+    if(ok(mt))c.drawImage(mt,tx,ty,tw,th);else{c.fillStyle="#141414";c.fillRect(tx,ty,tw,th)}
+    const COLS=[[.2008,.3539],[.495,.6461]],R0=.1617,RP=.04585,RH=.0354,N=15,lit=Math.ceil(m.pos*N-.001);
+    for(let r=0;r<N;r++){const on=r>=N-lit,col=r<3?(on?"#ff1b1b":"#3a1210"):r<6?(on?"#ffd21a":"#3a2f0c"):(on?"#1cf01c":"#0f3310");
+      COLS.forEach(k=>{c.fillStyle=col;c.fillRect(tx+tw*k[0],ty+th*(R0+RP*r),tw*(k[1]-k[0]),th*RH)})}
+    // the white box is the target: tap while the top light sits inside it
+    const colTop=ty+th*R0,colH=th*(RP*(N-1)+RH),zy0=colTop+colH*(1-Math.min(1,m.zone+.12)),zy1=colTop+colH*(1-Math.max(0,m.zone-.12)),zx0=tx+tw*COLS[0][0]-5,zx1=tx+tw*COLS[1][1]+5;
+    c.lineWidth=4;c.strokeStyle=m.blink>0?(m.hitOk?"#7dffb0":"#ff5a6e"):"#fff";c.strokeRect(zx0,zy0,zx1-zx0,zy1-zy0);c.lineWidth=1.5;c.strokeStyle="#141414";c.strokeRect(zx0-2.5,zy0-2.5,zx1-zx0+5,zy1-zy0+5);
+    c.fillStyle="#fff";c.strokeStyle="#141414";c.lineWidth=2;const ay=(zy0+zy1)/2;c.beginPath();c.moveTo(zx0-6,ay);c.lineTo(zx0-22,ay-10);c.lineTo(zx0-22,ay+10);c.closePath();c.fill();c.stroke();
+    for(let i=0;i<3;i++){c.beginPath();c.arc(20+i*19,H-20,7,0,7);c.fillStyle=i<m.miss?"#c8102e":"#ddd";c.fill();c.strokeStyle="#141414";c.lineWidth=1.5;c.stroke()}
+    c.fillStyle="#5d5d66";c.font="14px 'Patrick Hand',cursive";c.textAlign="left";c.fillText("misses",80,H-15);
   }
   if(m.type==="deliver"){
     const cols=["#f2c230","#ff3d9a","#2f6bff","#27b04a"],g=DGRID(H),cw=(W-16)/2,ok=k=>IMG[k]&&IMG[k].complete&&IMG[k].naturalWidth;
