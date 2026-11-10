@@ -521,7 +521,7 @@ const server = http.createServer(async (req, res) => {
         return serveFile(req, res, path.join(UP, f), EXT[f.split(".")[1]] || "application/octet-stream", post ? "private, max-age=3600" : "public, max-age=86400");
       }
       const file = path.normalize(path.join(PUB, p)); if (!file.startsWith(PUB + path.sep)) return send(res, 404, "Not found");
-      return serveFile(req, res, file, STATIC[path.extname(file)] || "application/octet-stream", path.extname(file) === ".js" ? "no-cache" : "public, max-age=86400");
+      return serveFile(req, res, file, STATIC[path.extname(file)] || "application/octet-stream", [".js", ".css"].includes(path.extname(file)) ? "no-cache" : "public, max-age=86400");
     }
     // writes: same-origin only
     const origin = req.headers.origin; if (origin && new URL(origin).host !== req.headers.host) throw new Err(403, "Blocked.");

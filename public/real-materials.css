@@ -1,0 +1,41 @@
+/* The original layout, colors, typography, content and behavior are retained.
+   Only the rendering of physical surfaces is replaced. */
+:root{--paper:#fbfaf5;--wob:4px}
+body{background-image:linear-gradient(90deg,transparent 21px,rgba(180,66,69,.3) 21px,rgba(180,66,69,.3) 22px,transparent 22px),repeating-linear-gradient(transparent 0 31px,rgba(103,143,175,.29) 31px 32px,transparent 32px 33px),url('/img/paper-texture.jpg');background-size:auto,auto,650px 650px}
+.sk::before{border:1px solid #d4d0c5;border-radius:3px;filter:none;background-color:var(--bg,var(--card));background-image:url('/img/paper-texture.jpg');background-size:450px;background-blend-mode:multiply;box-shadow:0 1px 1px #35291820,1px 5px 9px #35291820,0 14px 22px #3529180b}
+.btn{border:1px solid #0004;border-radius:5px;background-image:linear-gradient(#ffffff32,#ffffff00 45%,#0000000c);box-shadow:inset 0 1px 1px #ffffffa0,0 2px 2px #0002,1px 4px 7px #35291826;text-shadow:0 1px 0 #ffffff25}
+.btn:active{box-shadow:inset 0 2px 4px #0003;transform:translateY(2px)}
+.btn:hover{filter:brightness(1.035)}
+svg.ic{filter:none;stroke-width:2}
+.cover{border:5px solid #fff;border-radius:3px;box-shadow:0 2px 4px #0003,2px 6px 15px #35291826}
+.ava{border:5px solid #fff;box-shadow:0 1px 2px #0003,2px 4px 8px #35291835}
+.ava img{filter:drop-shadow(0 1px 1px #0002)}
+.story span{border:2px solid var(--pink);border-radius:50%;background:radial-gradient(circle at 35% 25%,#fff,#faf8f0 65%,#dedbd3);box-shadow:inset 0 1px 2px #fff,0 0 0 3px var(--yellow),1px 4px 6px #35291840}
+.media{border:6px solid #fff;border-radius:2px;box-shadow:0 1px 2px #0003,1px 5px 9px #35291830}
+.ph{background-image:url('/img/paper-texture.jpg');background-size:450px;background-blend-mode:multiply}
+.play{border:1px solid #bbb;border-radius:50%;box-shadow:0 2px 6px #0004,inset 0 2px 2px #fff}
+.lockmsg{background:rgba(250,248,240,.83);backdrop-filter:blur(7px)}
+.act,.chip{border:1px solid #bcb9b0;border-radius:4px;background-image:linear-gradient(#ffffff55,#ffffff00 45%,#0000000c);box-shadow:inset 0 1px 0 #fff9,0 2px 3px #35291822}
+.stamp{border-width:1px;border-radius:2px;background-color:#fffefa;background-image:url('/img/paper-texture.jpg');background-size:300px;box-shadow:1px 2px 3px #35291819}
+.nav div{border:1px solid #c0bcb1;border-radius:10px;background:linear-gradient(#ffffffec,#f5f2e9f2);backdrop-filter:blur(16px);box-shadow:0 2px 3px #0002,0 6px 22px #3529183b,inset 0 1px 0 #fff}
+.nav a{border-radius:5px}.nav a.on{box-shadow:inset 0 1px 1px #fff8,0 1px 3px #0002}
+input[type=text],input[type=email],input[type=url],input[type=number],input.pw,select,textarea{border:1px solid #b6b3aa;border-radius:4px;background:#fffefa;box-shadow:inset 0 1px 3px #35291816}
+.swatch{border:5px solid #fff;border-radius:3px;background:radial-gradient(ellipse at 40% 20%,#fff,#f4f2ec 65%,#e0ddd3);box-shadow:0 2px 6px #35291826}
+.swatch img{filter:drop-shadow(1px 3px 3px #0002)}
+.stage{border:6px solid #292a2a;border-radius:9px;background:radial-gradient(ellipse at 30% 0%,#303239,#141418 75%);box-shadow:inset 0 1px 5px #000a,0 3px 4px #0003,2px 7px 14px #35291825}
+.stage.has{background:#000}.adimg{border:5px solid #fff;border-radius:2px;box-shadow:1px 4px 7px #35291829}
+.chat p{border:1px solid #d0ccc1;border-radius:5px;background:#fffef9;box-shadow:0 1px 3px #35291815}
+.wall{border:1px solid #796555;border-radius:3px;background:#905945 url('/img/brick-wall.jpg') center/cover;box-shadow:inset 0 2px 8px #0004,0 3px 7px #35291825}
+.spot{border:1px dashed #fff8;border-radius:2px;background:#ffffff0b;text-shadow:0 1px 3px #000c}
+.spot.hate,.spot.mine{border:0;border-radius:1px;background-color:#f8f4e9;background-image:url('/img/paper-texture.jpg');background-size:220px;box-shadow:1px 1px 1px #0005,2px 4px 5px #0005;text-shadow:none}
+.spot.mine{background-color:var(--yellow);background-blend-mode:multiply}
+.spot.hate:before,.spot.mine:before{content:'';position:absolute;width:32%;height:11px;top:-4px;left:34%;background:linear-gradient(100deg,#f1e7bf78,#f5e6b9a6,#e5d4a969);box-shadow:0 1px 1px #0001;transform:rotate(-5deg);pointer-events:none}
+.meter{border:1px solid #9f9a8c;border-radius:4px;box-shadow:inset 0 2px 4px #0002}
+.meter i{background-image:linear-gradient(#ffffff50,transparent 50%,#0001)}
+.dots i{border:1px solid #9d1934;box-shadow:inset 0 1px 2px #fff7,0 2px 3px #0003}
+.toast{border-radius:4px;box-shadow:0 4px 14px #0004}.modal{background:#201c176e;backdrop-filter:blur(3px)}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* Money-green replacement for pink action buttons; other brand accents retained. */
+:root{--money-green:#237a45}
+.btn.pink,.act.on:not(.down){background-color:var(--money-green);color:#fff;background-image:linear-gradient(#ffffff24,#ffffff00 45%,#00000014);border-color:#175c32;text-shadow:0 1px 1px #0003}
