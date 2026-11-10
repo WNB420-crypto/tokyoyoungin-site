@@ -50,6 +50,7 @@ ALTER TABLE visits ADD COLUMN IF NOT EXISTS country TEXT;
 ALTER TABLE visits ADD COLUMN IF NOT EXISTS region TEXT;
 ALTER TABLE visits ADD COLUMN IF NOT EXISTS city TEXT;
 CREATE TABLE IF NOT EXISTS shifts(id TEXT PRIMARY KEY, user_id INTEGER, started DOUBLE PRECISION, done INTEGER DEFAULT 0);
+CREATE TABLE IF NOT EXISTS post_views(day TEXT, vid TEXT, post_id TEXT, PRIMARY KEY(day, vid, post_id));
 CREATE TABLE IF NOT EXISTS kv(k TEXT PRIMARY KEY, v TEXT);`;
 const TABLES = { // column lists, used to copy the old SQLite file across once
   users: ["id", "email", "pass", "role", "created", "customer", "sub_id", "sub_status", "paid", "sub_half", "pts", "earned", "spent", "intel", "day", "slot", "must_change"],
@@ -238,6 +239,18 @@ async function loadGeo() {
 }
 setInterval(() => loadGeo().then(loadCity).catch(() => {}), DAY).unref();
 
+/* ---------- who counts in the numbers ----------
+   Visitors, post views, ad views and ad clicks leave out bots, link-preview fetchers, and any browser
+   an owner has logged in from. */
+const BOT = /(?<!cu)bot(?![a-z])|crawl|spider|slurp|preview|facebookexternalhit|facebot|whatsapp\/|embedly|iframely|vkshare|curl\/|wget|python-|httpclient|okhttp|go-http|java\/|axios|node-fetch|headless|lighthouse|pingdom|uptime|bytespider|ahrefs|semrush|petalsearch|yandex|baiduspider|mediapartners|apis-google|googleother|slack-imgproxy/i;
+const isBot = req => { const ua = String(req.headers["user-agent"] || ""); return !ua || BOT.test(ua); };
+const staffVids = () => kv("staff_vids") || [];
+async function markStaff(vid) {
+  const list = staffVids(); if (list.includes(vid)) return;
+  list.push(vid); await setkv("staff_vids", list.slice(-300));
+  await run("DELETE FROM visits WHERE vid=? AND day=?", vid, today()); // drop what this browser added today before logging in
+}
+
 /* ---------- rate limit ---------- */
 const hits = new Map();
 function limit(ip, name, max, perMs = 60000) {
@@ -386,6 +399,7 @@ const act = {
     limit(ctx.ip, "auth", 8);
     const u = await one("SELECT * FROM users WHERE email=?", str(b.email, 200).toLowerCase());
     if (!u || !checkPw(String(b.password || ""), u.pass)) throw new Err(401, "Wrong email or password.");
+    if (u.role === "owner") await markStaff(ctx.vid);
     await login(ctx, u.id); return { ok: true };
   },
   async setLogin(ctx, b) {
@@ -419,7 +433,11 @@ const act = {
   },
   async seen(ctx, b) {
     limit(ctx.ip, "seen", 120);
-    for (const id of (Array.isArray(b.posts) ? b.posts : []).slice(0, 50)) { const p = await one("SELECT * FROM posts WHERE id=?", String(id)); if (p && !locked(p, ctx.user)) await run("UPDATE posts SET views=views+1 WHERE id=?", p.id); }
+    if (!ctx.counts) return { ok: true };
+    for (const id of (Array.isArray(b.posts) ? b.posts : []).slice(0, 50)) { // one view per person per post per day
+      const p = await one("SELECT * FROM posts WHERE id=?", String(id)); if (!p || locked(p, ctx.user)) continue;
+      if (await one("INSERT INTO post_views(day,vid,post_id) VALUES(?,?,?) ON CONFLICT DO NOTHING RETURNING post_id", today(), ctx.vid, p.id)) await run("UPDATE posts SET views=views+1 WHERE id=?", p.id);
+    }
     for (const id of (Array.isArray(b.ads) ? b.ads : []).slice(0, 20)) await run("UPDATE ads SET imps=imps+1 WHERE id=? AND active=1", Math.floor(Number(id)) || 0);
     return { ok: true };
   },
@@ -605,18 +623,24 @@ const server = http.createServer(async (req, res) => {
     if (!ctx.vid) { ctx.vid = rid(16); ctx.set.push(cookie("vid", ctx.vid, 60 * 60 * 24 * 400)); }
     if (ck.sid) { const s = await one("SELECT user_id FROM sessions WHERE th=?", sha(ck.sid)); if (s) ctx.user = await one("SELECT * FROM users WHERE id=?", s.user_id); }
     const isOwner = !!ctx.user && ctx.user.role === "owner", owner = isOwner && !ctx.user.must_change;
+    if (isOwner) await markStaff(ctx.vid);
+    ctx.counts = !isBot(req) && !isOwner && !staffVids().includes(ctx.vid);
     const ownerOnly = () => { throw new Err(403, isOwner ? "Set your own username and password first." : "Owner only."); };
 
     if (req.method === "GET" || req.method === "HEAD") {
       if (p === "/" || p === "/index.html") {
-        const [gc, gr, gcity] = placeOf(ctx.ip);
-        await run("INSERT INTO visits(day,vid,hits,country,region,city) VALUES(?,?,1,?,?,?) ON CONFLICT(day,vid) DO UPDATE SET hits=visits.hits+1, country=COALESCE(visits.country, excluded.country), region=COALESCE(visits.region, excluded.region), city=COALESCE(visits.city, excluded.city)", today(), ctx.vid, gc || null, gr || null, gcity || null);
         return send(res, 200, fs.readFileSync(path.join(PUB, "index.html")), { "Content-Type": STATIC[".html"], "Cache-Control": "no-cache", ...(ctx.set.length ? { "Set-Cookie": ctx.set } : {}) });
       }
-      if (p === "/api/state") return json(200, await state(ctx));
+      if (p === "/api/state") {
+        if (ctx.counts) { // a visit is counted when the page's own script asks for data, which bots that only fetch the page never do
+          const [gc, gr, gcity] = placeOf(ctx.ip);
+          await run("INSERT INTO visits(day,vid,hits,country,region,city) VALUES(?,?,1,?,?,?) ON CONFLICT(day,vid) DO UPDATE SET hits=visits.hits+1, country=COALESCE(visits.country, excluded.country), region=COALESCE(visits.region, excluded.region), city=COALESCE(visits.city, excluded.city)", today(), ctx.vid, gc || null, gr || null, gcity || null);
+        }
+        return json(200, await state(ctx));
+      }
       if (p === "/api/chat") { const after = Number(url.searchParams.get("after")) || 0; return json(200, { live: kv("live") || { on: false }, msgs: chat.filter(m => m.id > after), ids: chat.map(m => m.id) }); }
       if (p === "/api/owner/data") { if (!owner) ownerOnly(); return json(200, await studio()); }
-      if (p.startsWith("/go/")) { const a = await one("UPDATE ads SET clicks=clicks+1 WHERE id=? RETURNING url", int(p.slice(4))); if (!a) return send(res, 404, "Not found"); res.writeHead(302, { Location: a.url, "Cache-Control": "no-store" }); return res.end(); }
+      if (p.startsWith("/go/")) { const a = ctx.counts ? await one("UPDATE ads SET clicks=clicks+1 WHERE id=? RETURNING url", int(p.slice(4))) : await one("SELECT url FROM ads WHERE id=?", int(p.slice(4))); if (!a) return send(res, 404, "Not found"); res.writeHead(302, { Location: a.url, "Cache-Control": "no-store" }); return res.end(); }
       if (p.startsWith("/media/")) {
         const f = p.slice(7); if (!/^[a-f0-9]{24}\.[a-z0-9]{2,5}$/.test(f)) return send(res, 404, "Not found");
         const post = await one("SELECT * FROM posts WHERE media=?", f); if (post && locked(post, ctx.user)) return send(res, 403, "Members only");
@@ -658,6 +682,7 @@ const server = http.createServer(async (req, res) => {
   for (const stmt of SCHEMA.split(";").map(s => s.trim()).filter(Boolean)) await sql.unsafe(stmt);
   await importSqlite();
   for (const r of await all("SELECT k, v FROM kv")) { try { kvCache.set(r.k, JSON.parse(r.v)); } catch (e) {} }
+  await run("DELETE FROM post_views WHERE day<?", dayOf(Date.now() - 3 * DAY));
   await bootOwners();
   await seedMerch();
   await priceMerch();
