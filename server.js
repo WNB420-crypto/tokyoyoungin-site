@@ -119,9 +119,16 @@ async function seedMerch() {
     const src = path.join(__dirname, "seed", "merch", file + ".jpg"), name = sha("merch1:" + file).slice(0, 24) + ".jpg";
     if (!fs.existsSync(src)) continue;
     fs.copyFileSync(src, path.join(UP, name));
-    await run("INSERT INTO products(name,cents,img,shirt,sizes,ts) VALUES(?,?,?,1,?,?)", "TokyoYoungin " + brand + " Tee", 6000, name, "S,M,L,XL,2XL", Date.now());
+    await run("INSERT INTO products(name,cents,img,shirt,sizes,ts) VALUES(?,?,?,1,?,?)", "TokyoYoungin " + (MERCH_NAMES[file] || brand) + " Tee", 6000, name, "S,M,L,XL,2XL", Date.now());
   }
   await setkv("seed_merch_1", Date.now()); console.log("added the first ten tees to the store");
+}
+// One-time rename of those ten tees to altered spellings.
+const MERCH_NAMES = { bet: "Bett", hot97: "Hott 9-Seven", mtv: "Em-Tee-Vee", vibe: "Vybe", xxl: "Double-XL", "breakfast-club": "Brekfast Klub", complex: "Komplex", "no-jumper": "No Jumpa", "shade-room": "Shayd Room", worldstarhiphop: "Wurldstar" };
+async function renameMerch() {
+  if (kv("rename_merch_1")) return; let n = 0;
+  for (const [file, label] of Object.entries(MERCH_NAMES)) n += (await all("UPDATE products SET name=? WHERE img=? RETURNING id", "TokyoYoungin " + label + " Tee", sha("merch1:" + file).slice(0, 24) + ".jpg")).length;
+  await setkv("rename_merch_1", Date.now()); console.log("renamed " + n + " tees");
 }
 // One-time price change for those ten tees: $60 each.
 async function priceMerch() {
@@ -552,5 +559,6 @@ const server = http.createServer(async (req, res) => {
   await bootOwners();
   await seedMerch();
   await priceMerch();
+  await renameMerch();
   server.listen(PORT, () => { console.log("TokyoYoungin site on " + BASE + " · payments " + (KEY ? "on" : "off") + " · Postgres · uploads in " + UP); ensureWebhook(); });
 })().catch(e => { console.error("startup failed:", e); process.exit(1); });
