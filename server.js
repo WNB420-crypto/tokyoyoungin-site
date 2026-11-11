@@ -127,6 +127,18 @@ async function seedMerch() {
   }
   await setkv("seed_merch_1", Date.now()); console.log("added the first ten tees to the store");
 }
+// Second merch drop: ten more tees, added once. Named by what the design looks like.
+const MERCH_SEED2 = [["juice-box", "Juice Box"], ["script", "Script"], ["blue-stripe", "Blue Stripe"], ["bold", "Bold"], ["red-arrow", "Red Arrow"], ["graffiti-skyline", "Graffiti Skyline"], ["red-x", "Red X"], ["radar", "Radar"], ["red-box", "Red Box"], ["red-block", "Red Block"]];
+async function seedMerch2() {
+  if (kv("seed_merch_2")) return; let n = 0;
+  for (const [file, label] of MERCH_SEED2) {
+    const src = path.join(__dirname, "seed", "merch2", file + ".jpg"), name = sha("merch2:" + file).slice(0, 24) + ".jpg";
+    if (!fs.existsSync(src)) continue;
+    fs.copyFileSync(src, path.join(UP, name));
+    await run("INSERT INTO products(name,cents,img,shirt,sizes,ts) VALUES(?,?,?,1,?,?)", "TokyoYoungin " + label + " Tee", 6000, name, "S,M,L,XL,2XL", Date.now()); n++;
+  }
+  await setkv("seed_merch_2", Date.now()); console.log("added " + n + " more tees to the store");
+}
 // One-time rename of those ten tees to altered spellings.
 const MERCH_NAMES = { bet: "Bett", hot97: "Hott 9-Seven", mtv: "Em-Tee-Vee", vibe: "Vybe", xxl: "Double-XL", "breakfast-club": "Brekfast Klub", complex: "Komplex", "no-jumper": "No Jumpa", "shade-room": "Shayd Room", worldstarhiphop: "Wurldstar" };
 async function renameMerch() {
@@ -687,5 +699,6 @@ const server = http.createServer(async (req, res) => {
   await seedMerch();
   await priceMerch();
   await renameMerch();
+  await seedMerch2();
   server.listen(PORT, () => { console.log("TokyoYoungin site on " + BASE + " · payments " + (KEY ? "on" : "off") + " · Postgres · uploads in " + UP); ensureWebhook(); loadGeo().then(loadCity).catch(() => {}); });
 })().catch(e => { console.error("startup failed:", e); process.exit(1); });
