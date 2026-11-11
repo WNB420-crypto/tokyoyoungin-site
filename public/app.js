@@ -191,7 +191,7 @@ const BLDG=[[80,80,280,220,"#c96b52"],[440,80,240,220,"#b9895a"],[760,80,280,220
 const NPC_AT=[[720,350],[400,650],[720,650],[1080,500],[400,40],[40,650]], NPC_COL=["#ff1e9c","#2456d6","#237a45"], MINIS=["catch","cups","horns"];
 const G={on:false,last:null}, IMG={};
 const ASSET_BASE=window.TOKYO_ASSET_BASE||"/img/";
-function gAssets(){gImg("detective",ASSET_BASE+"detective.png");for(let i=1;i<=5;i++)gImg("hater"+i,ASSET_BASE+"hater-"+i+".png");for(let i=0;i<10;i++)gImg("logo"+i,ASSET_BASE+"logo-"+i+".png");for(let i=1;i<=5;i++)gImg("stranger"+i,ASSET_BASE+"stranger-"+i+".png");for(let i=0;i<4;i++){gImg("wbag"+i,ASSET_BASE+"wnb-bag-"+i+".png");gImg("whome"+i,ASSET_BASE+"wnb-home-"+i+".png");gImg("bullhorn"+i,ASSET_BASE+"bullhorn-"+i+".png?v=2")}gImg("cmbox",ASSET_BASE+"cm-box.png");gImg("cmrecord",ASSET_BASE+"cm-record.png");gImg("goldbar",ASSET_BASE+"gold-barbell.png");gImg("goldmic",ASSET_BASE+"gold-mic.png");gImg("goldmeter",ASSET_BASE+"gold-meter.png")}
+function gAssets(){gImg("facade",ASSET_BASE+"quarter-facade.png");gImg("detective",ASSET_BASE+"detective.png");for(let i=1;i<=5;i++)gImg("hater"+i,ASSET_BASE+"hater-"+i+".png");for(let i=0;i<10;i++)gImg("logo"+i,ASSET_BASE+"logo-"+i+".png");for(let i=1;i<=5;i++)gImg("stranger"+i,ASSET_BASE+"stranger-"+i+".png");for(let i=0;i<4;i++){gImg("wbag"+i,ASSET_BASE+"wnb-bag-"+i+".png");gImg("whome"+i,ASSET_BASE+"wnb-home-"+i+".png");gImg("bullhorn"+i,ASSET_BASE+"bullhorn-"+i+".png?v=2")}gImg("cmbox",ASSET_BASE+"cm-box.png");gImg("cmrecord",ASSET_BASE+"cm-record.png");gImg("goldbar",ASSET_BASE+"gold-barbell.png");gImg("goldmic",ASSET_BASE+"gold-mic.png");gImg("goldmeter",ASSET_BASE+"gold-meter.png")}
 const pick=a=>a[Math.floor(Math.random()*a.length)], shuffle=a=>a.map(x=>[Math.random(),x]).sort((p,q)=>p[0]-q[0]).map(x=>x[1]);
 function gImg(k,src){if(!IMG[k]){IMG[k]=new Image();IMG[k].src=src}return IMG[k]}
 function gSpots(){const s=[];BLDG.forEach((b,i)=>{const r=Math.floor(i/3);if(r<2)s.push({x:b[0]+b[2]*.5,y:b[1]+b[3],side:"s"});if(r>0&&i%2===0)s.push({x:b[0]+b[2]*.3,y:b[1],side:"n"});if(i%3<2&&i%2===1)s.push({x:b[0]+b[2],y:b[1]+b[3]*.5,side:"e"})});return s.map((o,i)=>({...o,s:i<3?"mine":"empty",logo:i%10,age:0}))}
@@ -200,7 +200,7 @@ async function gStart(){
   try{const r=await api("gameStart");S.me.day.shifts++;
     Object.assign(G,{on:true,id:r.id,t:0,cred:0,heat:0,supply:6,spots:gSpots(),spawnIn:3,intel:[],ig:false,px:400,py:350,face:1,walk:0,inx:0,iny:0,keys:{},joy:null,act:null,still:0,npcs:[],npcPlan:shuffle(NPC_AT).slice(0,3).map((p,i)=>({at:[10,45,80][i],x:p[0],y:p[1],col:NPC_COL[i],mini:shuffle(MINIS)[0]})),strangerPick:shuffle([1,2,3,4,5]),mini:null,flash:null,last_t:0,hudKey:"",btnKey:""});
     const kinds=shuffle(MINIS);G.npcPlan.forEach((n,i)=>n.mini=kinds[i]); // one of each mini-game per shift
-    G.logoNext=3;G.haterNext=0;G.board=window.innerWidth>700;G.haters=Array.from({length:5},(_,i)=>({id:i+1,x:[40,400,720,1080,40][i],y:[350,40,650,350,940][i],path:[],target:null,posting:0,walk:0}));
+    G.angle=0;G.look=null;G.cards=[];G.logoNext=3;G.haterNext=0;G.board=false;G.haters=Array.from({length:5},(_,i)=>({id:i+1,x:[40,400,720,1080,40][i],y:[350,40,650,350,940][i],path:[],target:null,posting:0,walk:0}));
     render();gMount();
   }finally{G.starting=false}
 }
@@ -208,21 +208,21 @@ function gMount(){
   const c=$("#gcan");if(!c)return;gAssets();
   const fit=()=>{const r=c.getBoundingClientRect(),d=Math.min(2,window.devicePixelRatio||1);G.W=Math.round(r.width);G.H=Math.round(r.height);c.width=G.W*d;c.height=G.H*d;G.dpr=d};fit();G.fit=fit;window.addEventListener("resize",fit);
   const pos=e=>{const r=c.getBoundingClientRect();return {x:e.clientX-r.left,y:e.clientY-r.top}};
-  c.onpointerdown=e=>{e.preventDefault();try{c.setPointerCapture(e.pointerId)}catch(x){}const p=pos(e);if(G.mini)return miniDown(p);G.joy={id:e.pointerId,ox:p.x,oy:p.y,x:p.x,y:p.y}};
-  c.onpointermove=e=>{const p=pos(e);if(G.mini)return miniMove(p);if(G.joy&&G.joy.id===e.pointerId){G.joy.x=p.x;G.joy.y=p.y}};
-  c.onpointerup=c.onpointercancel=e=>{if(G.joy&&G.joy.id===e.pointerId)G.joy=null};
-  G.kd=e=>{if(!G.on||/INPUT|TEXTAREA|SELECT/.test(e.target.tagName))return;const k=e.key.toLowerCase();if(["arrowup","arrowdown","arrowleft","arrowright","w","a","s","d"," "].includes(k)){e.preventDefault();G.keys[k]=true;if(k===" ")gAct()}};
+  c.onpointerdown=e=>{e.preventDefault();try{c.setPointerCapture(e.pointerId)}catch(x){}const p=pos(e);if(G.mini)return miniDown(p);if(p.x>G.W*.48){G.look={id:e.pointerId,x:p.x};return;}G.joy={id:e.pointerId,ox:p.x,oy:p.y,x:p.x,y:p.y}};
+  c.onpointermove=e=>{const p=pos(e);if(G.mini)return miniMove(p);if(G.look&&G.look.id===e.pointerId){G.angle+=(p.x-G.look.x)*.006;G.look.x=p.x;}if(G.joy&&G.joy.id===e.pointerId){G.joy.x=p.x;G.joy.y=p.y}};
+  c.onpointerup=c.onpointercancel=e=>{if(G.look&&G.look.id===e.pointerId)G.look=null;if(G.joy&&G.joy.id===e.pointerId)G.joy=null};
+  G.blur=()=>{G.keys={};G.joy=null;G.look=null};window.addEventListener("blur",G.blur);G.kd=e=>{if(!G.on||/INPUT|TEXTAREA|SELECT/.test(e.target.tagName))return;const k=e.key.toLowerCase();if(["arrowup","arrowdown","arrowleft","arrowright","w","a","s","d","q","e"," "].includes(k)){e.preventDefault();G.keys[k]=true;if(k===" ")gAct()}};
   G.ku=e=>{G.keys[e.key.toLowerCase()]=false};window.addEventListener("keydown",G.kd);window.addEventListener("keyup",G.ku);
   G.last_t=performance.now();G.raf=requestAnimationFrame(gFrame);
 }
-function gUnmount(){cancelAnimationFrame(G.raf);window.removeEventListener("keydown",G.kd);window.removeEventListener("keyup",G.ku);if(G.fit)window.removeEventListener("resize",G.fit)}
+function gUnmount(){window.removeEventListener("blur",G.blur);cancelAnimationFrame(G.raf);window.removeEventListener("keydown",G.kd);window.removeEventListener("keyup",G.ku);if(G.fit)window.removeEventListener("resize",G.fit)}
 function gFrame(now){
   if(!G.on)return;const dt=Math.min(.05,(now-G.last_t)/1000);G.last_t=now;
   if(G.mini)miniStep(dt);else gStep(dt);
   if(!G.on)return;gPaint();gHud();G.raf=requestAnimationFrame(gFrame);
 }
 function gTarget(){ // the nearest thing the detective can act on
-  let best=null,bd=REACH;const near=(o,type)=>{const d=Math.hypot(o.x-G.px,o.y-G.py);if(d<bd){bd=d;best={type,o}}};
+  let best=null,bd=REACH;const near=(o,type)=>{const d=Math.hypot(o.x-G.px,o.y-G.py);if(d<bd&&fpFacing(o)){bd=d;best={type,o}}};
   G.npcs.forEach(n=>{if(!n.done)near(n,"help")});if(best)return best;
   G.spots.forEach(s=>{if(s.s==="hate")near(s,"snatch")});if(best)return best;
   if(G.supply>0)G.spots.forEach(s=>{if(s.s==="empty")near(s,"post")});return best;
@@ -230,8 +230,10 @@ function gTarget(){ // the nearest thing the detective can act on
 function gAct(){if(!G.on||G.mini||G.act)return;const t=gTarget();if(!t)return;if(t.type==="help"){G.mini=miniStart(t.o);return}G.act={type:t.type,o:t.o,t:0,need:t.type==="snatch"?.7:.9}}
 function gStep(dt){
   G.t+=dt;
-  let ix=(G.keys.arrowright||G.keys.d?1:0)-(G.keys.arrowleft||G.keys.a?1:0),iy=(G.keys.arrowdown||G.keys.s?1:0)-(G.keys.arrowup||G.keys.w?1:0);
-  if(G.joy){const dx=G.joy.x-G.joy.ox,dy=G.joy.y-G.joy.oy,m=Math.hypot(dx,dy);if(m>8){const k=Math.min(1,m/46)/m;ix=dx*k;iy=dy*k}}
+  G.angle+=((G.keys.arrowright||G.keys.e?1:0)-(G.keys.arrowleft||G.keys.q?1:0))*dt*1.9;
+  let forward=(G.keys.w||G.keys.arrowup?1:0)-(G.keys.s||G.keys.arrowdown?1:0),strafe=(G.keys.d?1:0)-(G.keys.a?1:0);
+  if(G.joy){forward=Math.max(-1,Math.min(1,(G.joy.oy-G.joy.y)/46));strafe=Math.max(-1,Math.min(1,(G.joy.x-G.joy.ox)/46));}
+  let ix=Math.cos(G.angle)*forward-Math.sin(G.angle)*strafe,iy=Math.sin(G.angle)*forward+Math.cos(G.angle)*strafe;
   const m=Math.hypot(ix,iy);if(m>1){ix/=m;iy/=m}
   const moving=m>.05;if(moving){G.walk+=dt*9;G.still=0;if(Math.abs(ix)>.1)G.face=ix>0?1:-1}else G.still+=dt;
   const R=15,blocked=(x,y)=>x<R||y<R||x>GW.w-R||y>GW.h-R||BLDG.some(b=>x>b[0]-R&&x<b[0]+b[2]+R&&y>b[1]-R&&y<b[1]+b[3]+R);
@@ -296,27 +298,6 @@ function posterAt(c,s,t){ // posters sit on the wall edge
   c.restore();
   if(s.s==="hate"){const left=1-s.age/HATE_LIFE,warn=left<.3&&Math.floor(t*4)%2;c.lineWidth=5;c.strokeStyle="rgba(20,20,20,.25)";c.beginPath();c.arc(x+w/2,y+h/2,31,0,7);c.stroke();c.strokeStyle=warn?"#ffdd00":"#c8102e";c.beginPath();c.arc(x+w/2,y+h/2,31,-Math.PI/2,-Math.PI/2+Math.PI*2*left);c.stroke()}
 }
-function gPaint(){
-  const cv=$("#gcan");if(!cv)return;const c=cv.getContext("2d"),W=G.W,H=G.H;c.setTransform(G.dpr,0,0,G.dpr,0,0);
-  if(G.mini)return miniPaint(c,W,H);
-  const Z=G.board?Math.min(W/GW.w,H/GW.h):.95,VW=W/Z,VH=H/Z,cx=VW>=GW.w?(GW.w-VW)/2:Math.max(0,Math.min(GW.w-VW,G.px-VW/2)),cy=VH>=GW.h?(GW.h-VH)/2:Math.max(0,Math.min(GW.h-VH,G.py-VH/2)); // zoomed out a little so more of the block shows
-  c.fillStyle="#d9d4c7";c.fillRect(0,0,W,H);c.save();c.scale(Z,Z);c.translate(-cx,-cy);
-  c.imageSmoothingEnabled=false;gQuarter(c);
-  G.spots.forEach(s=>posterAt(c,s,G.t));
-  G.haters.forEach(h=>{person(c,h.x,h.y,"#ad3545",{hater:h.id,moving:h.path.length>0,walk:h.walk});c.font="bold 9px monospace";c.textAlign="center";c.fillStyle="#fff5dc";c.fillRect(h.x-25,h.y+14,50,13);c.fillStyle="#8c2435";c.fillText("HATER "+h.id,h.x,h.y+24);if(h.target&&!h.path.length){c.fillStyle="#f0bb48";c.fillRect(h.x+12,h.y-35,12,17);c.fillStyle="#d53345";c.fillRect(h.x-20,h.y-66,40*h.posting/1.2,4)}});
-  G.npcs.forEach(n=>{if(n.done)return;person(c,n.x,n.y,n.col,{stranger:n.who});const by=n.y-76+Math.sin(G.t*4)*3;c.fillStyle="#fff";c.strokeStyle="#141414";c.lineWidth=2.5;c.beginPath();c.arc(n.x,by,12,0,7);c.fill();c.stroke();c.fillStyle="#c8102e";c.font="bold 18px sans-serif";c.textAlign="center";c.fillText("!",n.x,by+6);
-    c.strokeStyle=n.left<10?"#c8102e":"#2456d6";c.lineWidth=3;c.beginPath();c.arc(n.x,by,16,-Math.PI/2,-Math.PI/2+Math.PI*2*Math.max(0,n.left/38));c.stroke()});
-  const tg=G.act?G.act.o:(gTarget()||{}).o;if(tg){c.strokeStyle="#fff";c.lineWidth=3;c.setLineDash([6,5]);c.beginPath();c.arc(tg.x,tg.y,38+Math.sin(G.t*6)*2,0,7);c.stroke();c.setLineDash([])}
-  person(c,G.px,G.py,"#fdb913",{hat:true,moving:G.still===0,walk:G.walk,face:G.face});
-  if(G.act){const p=G.act.t/G.act.need;c.lineWidth=6;c.strokeStyle="rgba(20,20,20,.3)";c.beginPath();c.arc(G.px,G.py-48,13,0,7);c.stroke();c.strokeStyle="#237a45";c.beginPath();c.arc(G.px,G.py-48,13,-Math.PI/2,-Math.PI/2+Math.PI*2*p);c.stroke()}
-  if(G.flash){c.globalAlpha=1-G.flash.t/1.1;c.fillStyle=G.flash.ok?"#237a45":"#c8102e";c.strokeStyle="#fff";c.lineWidth=4;c.font="bold 26px sans-serif";c.textAlign="center";c.strokeText(G.flash.text,G.flash.x,G.flash.y-40-G.flash.t*30);c.fillText(G.flash.text,G.flash.x,G.flash.y-40-G.flash.t*30);c.globalAlpha=1}
-  c.restore();
-  // arrows at the screen edge point to hate posters and strangers that are out of view
-  const arrow=(o,col,mark)=>{const sx=(o.x-cx)*Z,sy=(o.y-cy)*Z;if(sx>18&&sx<W-18&&sy>18&&sy<H-18)return;const a=Math.atan2(sy-H/2,sx-W/2),ex=Math.max(22,Math.min(W-22,sx)),ey=Math.max(22,Math.min(H-22,sy));
-    c.save();c.translate(ex,ey);c.fillStyle=col;c.strokeStyle="#fff";c.lineWidth=2.5;c.beginPath();c.arc(0,0,13,0,7);c.fill();c.stroke();c.rotate(a);c.beginPath();c.moveTo(22,0);c.lineTo(12,-7);c.lineTo(12,7);c.closePath();c.fill();c.rotate(-a);c.fillStyle="#fff";c.font="bold 14px sans-serif";c.textAlign="center";c.fillText(mark,0,5);c.restore()};
-  G.spots.forEach(s=>{if(s.s==="hate")arrow(s,"#c8102e","✕")});G.npcs.forEach(n=>{if(!n.done)arrow(n,"#2456d6","!")});
-  if(G.joy){c.globalAlpha=.55;c.strokeStyle="#fff";c.lineWidth=3;c.beginPath();c.arc(G.joy.ox,G.joy.oy,46,0,7);c.stroke();const dx=G.joy.x-G.joy.ox,dy=G.joy.y-G.joy.oy,m=Math.max(1,Math.hypot(dx,dy)),k=Math.min(46,m)/m;c.fillStyle="#141414";c.beginPath();c.arc(G.joy.ox+dx*k,G.joy.oy+dy*k,20,0,7);c.fill();c.globalAlpha=1}
-}
 // Stylized French Quarter board; original collision footprints remain unchanged.
 function gQuarter(c){
  if(!G.quarter){const map=document.createElement('canvas');map.width=GW.w;map.height=GW.h;const p=map.getContext('2d');
@@ -374,7 +355,7 @@ const QUEST={
  5:{type:"lift",title:"Spot me!",sub:"Tap fast to finish 12 reps"}};
 function miniStart(n){
   const q=QUEST[n.who]||{type:n.mini};
-  n.done=true;G.joy=null;G.act=null;const m={type:q.type,skin:q.skin||"",title:q.title||"",sub:q.sub||"",col:n.col,who:n.who,t:0,phase:"intro",res:null,px:G.W/2};
+  n.done=true;G.joy=null;G.look=null;G.keys={};G.act=null;const m={type:q.type,skin:q.skin||"",title:q.title||"",sub:q.sub||"",col:n.col,who:n.who,t:0,phase:"intro",res:null,px:G.W/2};
   if(m.type==="meter")Object.assign(m,{limit:18,need:3,got:0,miss:0,pos:0,zone:.3+Math.random()*.4,blink:0});
   if(m.type==="lift")Object.assign(m,{limit:9,need:12,got:0,up:0});
   if(m.type==="deliver")Object.assign(m,{limit:18,need:6,got:0,miss:0,cur:Math.floor(Math.random()*4),fly:null,bad:-1,badT:0});
@@ -521,6 +502,34 @@ async function gEnd(){
   try{await load()}catch(e){}
   if(tab==="game")render();else $("#topJoin").textContent=paid()?num(S.me.pts)+" pts":"Join "+money(S.price);
 }
+
+// First-person renderer: textured rectangle raycasting with depth-tested pixel sprites.
+function fpRay(x,y,dx,dy){let best={d:1e5,u:0,b:0,side:0};BLDG.forEach((b,i)=>{for(let s=0;s<4;s++){const vert=s<2,v=vert?dx:dy;if(Math.abs(v)<1e-8)continue;const edge=vert?b[0]+(s===1?b[2]:0):b[1]+(s===3?b[3]:0),t=(edge-(vert?x:y))/v;if(t<=0||t>=best.d)continue;const q=(vert?y:x)+t*(vert?dy:dx),lo=vert?b[1]:b[0],len=vert?b[3]:b[2];if(q>=lo&&q<=lo+len)best={d:t,u:(q-lo)/len,b:i,side:s};}});return best;}
+function fpFacing(o){const a=Math.atan2(o.y-G.py,o.x-G.px)-G.angle;return Math.cos(a)>.35&&fpRay(G.px,G.py,Math.cos(a+G.angle),Math.sin(a+G.angle)).d>=Math.hypot(o.x-G.px,o.y-G.py)-3;}
+function gPaint(){
+ const cv=$('#gcan');if(!cv)return;const out=cv.getContext('2d');out.setTransform(G.dpr,0,0,G.dpr,0,0);out.imageSmoothingEnabled=false;
+ if(G.mini)return miniPaint(out,G.W,G.H);
+ if(!G.fp){G.fp=document.createElement('canvas');G.fp.width=480;G.fp.height=300;}const cv2=G.fp,c=cv2.getContext('2d'),W=480,H=300,hy=137,f=270,eye=42,wall=150; c.imageSmoothingEnabled=false;
+ const sky=c.createLinearGradient(0,0,0,hy);sky.addColorStop(0,'#071822');sky.addColorStop(1,'#426c66');c.fillStyle=sky;c.fillRect(0,0,W,hy);c.fillStyle='#e6c887';c.fillRect(380,25,13,13);
+ const ca=Math.cos(G.angle),sa=Math.sin(G.angle),depth=[];
+ // Projected cobblestone ground, sampled in chunky pixels.
+ for(let y=hy+1;y<H;y+=3){const dist=eye*f/(y-hy);for(let x=0;x<W;x+=4){const off=(x-W/2)/f,wx=G.px+dist*(ca-off*sa),wy=G.py+dist*(sa+off*ca),row=Math.floor(wy/14),col=Math.floor((wx+(row%2)*12)/24),edge=((wx+(row%2)*12)%24+24)%24<2||((wy%14)+14)%14<2;const tone=Math.max(17,Math.floor(65-dist*.035))+(row*13+col*7)%9;c.fillStyle=edge?'#233735':`rgb(${tone},${tone+12},${tone+8})`;c.fillRect(x,y,4,3);}}
+ const tex=IMG.facade;
+ for(let x=0;x<W;x++){const off=(x-W/2)/f,hit=fpRay(G.px,G.py,ca-off*sa,sa+off*ca);depth[x]=hit.d;if(hit.d>4000)continue;const h=wall*f/hit.d,top=hy-(wall-eye)*f/hit.d;
+ if(tex&&tex.complete&&tex.naturalWidth)c.drawImage(tex,Math.min(tex.naturalWidth-1,Math.floor(hit.u*tex.naturalWidth)),0,1,tex.naturalHeight,x,top,1,h);else{c.fillStyle='#366951';c.fillRect(x,top,1,h);}c.fillStyle=`rgba(5,19,25,${Math.min(.8,hit.d/1300)+(hit.side<2?.08:0)})`;c.fillRect(x,top,1,h);}
+ const sprites=[];
+ G.haters.forEach(h=>sprites.push({x:h.x,y:h.y,img:IMG['hater'+h.id],height:66,base:0,label:h.target?'POSTING':'HATER',color:'#ff7782'}));
+ G.npcs.filter(n=>!n.done).forEach(n=>sprites.push({x:n.x,y:n.y,img:IMG['stranger'+n.who],height:66,base:0,label:'HELP • '+Math.ceil(n.left)+'s',color:'#86e8d4'}));
+ G.spots.forEach((s,i)=>{const p={x:s.x+(s.side==='e'?2:0),y:s.y+(s.side==='s'?2:s.side==='n'?-2:0)};if(!G.cards)G.cards=[];const key=s.s+':'+s.logo;let card=G.cards[i];if(!card||card.key!==key||!card.ready){const cc=document.createElement('canvas');cc.width=64;cc.height=80;const z=cc.getContext('2d');z.fillStyle=s.s==='hate'?'#ffdad3':'#fff7dc';z.fillRect(0,0,64,80);z.strokeStyle=s.s==='hate'?'#a61932':'#c59d43';z.lineWidth=5;z.strokeRect(2,2,60,76);const im=IMG['logo'+s.logo];if(s.s!=='empty'&&im?.naturalWidth)z.drawImage(im,6,14,52,42);z.fillStyle='#18372d';z.font='bold 8px monospace';z.textAlign='center';z.fillText(s.s==='empty'?'POST HERE':s.s==='hate'?'TAKE IT DOWN':'TOKYOYOUNGIN',32,69);if(s.s==='hate'){z.strokeStyle='#bc2342';z.lineWidth=4;z.beginPath();z.moveTo(8,12);z.lineTo(57,57);z.stroke();}card=G.cards[i]={key,img:cc,ready:!!im?.naturalWidth};}sprites.push({...p,img:card.img,height:28,base:24});});
+ sprites.forEach(s=>{const dx=s.x-G.px,dy=s.y-G.py;s.z=dx*ca+dy*sa;s.side=-dx*sa+dy*ca;});sprites.sort((a,b)=>b.z-a.z);
+ for(const s of sprites){if(s.z<5||!s.img||!s.img.width)continue;const h=s.height*f/s.z,w=h*s.img.width/s.img.height,sx=W/2+s.side*f/s.z-w/2,sy=hy+(eye-s.base-s.height)*f/s.z;for(let x=Math.max(0,Math.floor(sx));x<Math.min(W,sx+w);x++){if(s.z>depth[x]+3)continue;const u=Math.max(0,Math.min(s.img.width-1,Math.floor((x-sx)/w*s.img.width)));c.drawImage(s.img,u,0,1,s.img.height,x,sy,1,h);}if(s.label&&s.z<260&&Math.abs(s.side*f/s.z)<W/2&&s.z<depth[Math.max(0,Math.min(W-1,Math.floor(sx+w/2)))]+4){c.font='bold 7px monospace';c.textAlign='center';c.fillStyle=s.color;c.fillText(s.label,sx+w/2,sy-5);}}
+ // Compass/map and center reticle.
+ c.fillStyle='#f7e4ad';c.fillRect(236,149,8,1);c.fillRect(240,145,1,9);
+ c.fillStyle='#071c22cc';c.fillRect(8,8,95,87);const mz=.075;BLDG.forEach(b=>{c.fillStyle='#6c8974';c.fillRect(14+b[0]*mz,13+b[1]*mz,b[2]*mz,b[3]*mz)});G.spots.filter(s=>s.s==='hate').forEach(s=>{c.fillStyle='#ff6070';c.fillRect(13+s.x*mz,12+s.y*mz,3,3)});G.npcs.filter(n=>!n.done).forEach(n=>{c.fillStyle='#63d8ff';c.fillRect(13+n.x*mz,12+n.y*mz,3,3)});c.fillStyle='#f9dd8c';c.fillRect(13+G.px*mz,12+G.py*mz,3,3);c.strokeStyle='#f9dd8c';c.beginPath();c.moveTo(14+G.px*mz,13+G.py*mz);c.lineTo(14+G.px*mz+ca*8,13+G.py*mz+sa*8);c.stroke();
+ const target=gTarget();c.textAlign='center';c.font='bold 9px monospace';if(target){c.fillStyle='#061b20dd';c.fillRect(115,237,250,23);c.fillStyle='#fce6a8';c.fillText(target.type==='help'?'HELP STRANGER • ACTION':target.type==='snatch'?'REMOVE POSTER • ACTION':'PLACE YOUR POSTER • ACTION',240,252);}if(G.act){c.fillStyle='#1d302b';c.fillRect(180,264,120,5);c.fillStyle='#b7ed78';c.fillRect(180,264,120*G.act.t/G.act.need,5);}if(G.flash){c.fillStyle='#f8da7c';c.fillText(G.flash.text,240,110);}
+ c.fillStyle='#fff1c5';c.textAlign='right';c.font='bold 8px monospace';c.fillText('FRENCH QUARTER / NIGHT SHIFT',470,17);
+ out.drawImage(cv2,0,0,G.W,G.H);
+}
 function rewardsHtml(can){
   return `<div class="sk stack" style="transform:rotate(1deg)"><h3>Rewards</h3><div class="tblwrap"><table>${REWARDS.map(r=>`<tr><td>${esc(r.label)}${r.id==="sub"?` ($${HALF})`:""}</td><td class="n">${num(r.cost)} pts</td>${can?`<td class="n"><button class="btn sm" data-a="redeem" data-r="${r.id}" ${S.me.pts<r.cost||(r.id==="sub"&&(S.me.subHalf||S.me.owner))?"disabled":""}>Get</button></td>`:""}</tr>`).join("")}</table></div>
    <p class="soft">One reward per order. Rewards stack on top of the member price.</p></div>`;
@@ -535,15 +544,14 @@ function earnHtml(){
    <tr><td>Tip a post, once a day</td><td class="n">5</td></tr></table></div></div>`;
 }
 function renderGame(){
-  const rules=`<div class="sk stack"><h3>The job</h3><ul style="margin:0;padding-left:22px"><li>Walk Detective Tokyo around the neighborhood. Drag anywhere on the street to move.</li><li>Snatch down a BAN TOKYO poster: +${PTS.snatch} cred</li><li>Put up a TokyoYoungin poster on an empty wall: +${PTS.post} cred, 6 per shift</li><li>Help a stranger with their side quest: +${PTS.help} cred and a piece of intel</li><li>A hate poster left up until its ring runs out: ${PTS.miss} cred and a strike</li><li>3 strikes and they take down your Instagram: ${PTS.ig} cred, shift over</li><li>A shift is 2 minutes. Every ${CRED_PER} cred banks 1 point, up to ${SHIFT_CAP} a shift. A bad shift can cost you up to 10.</li></ul></div>`;
+  const rules=`<div class="sk stack"><h3>The job</h3><ul style="margin:0;padding-left:22px"><li>See the French Quarter through Detective Tokyo's eyes. Drag the left side of the screen to walk and the right side to look.</li><li>Snatch down a BAN TOKYO poster: +${PTS.snatch} cred</li><li>Put up a TokyoYoungin poster on an empty wall: +${PTS.post} cred, 6 per shift</li><li>Help a stranger with their side quest: +${PTS.help} cred and a piece of intel</li><li>A hate poster left up until its ring runs out: ${PTS.miss} cred and a strike</li><li>3 strikes and they take down your Instagram: ${PTS.ig} cred, shift over</li><li>A shift is 2 minutes. Every ${CRED_PER} cred banks 1 point, up to ${SHIFT_CAP} a shift. A bad shift can cost you up to 10.</li></ul></div>`;
   if(!paid())return `<div class="row" style="justify-content:space-between"><h1 style="transform:rotate(-2deg)">Detective Tokyo</h1><span class="stamp pinkc">Members</span></div>
    <div class="stage"><div><h2>The streets need intel</h2><p style="margin-top:8px">Members play as Detective Tokyo and earn points toward discounts and free merch.</p></div></div>
    <div><button class="btn pink" data-a="go" data-to="join">Join for ${money(S.price)} to play</button></div>${rules}${rewardsHtml(false)}${earnHtml()}`;
   if(G.on)return `<div class="row" style="justify-content:space-between"><h1 style="transform:rotate(-2deg);font-size:24px">On the case</h1><div class="row" id="ghud" style="gap:6px"></div></div>
-   <div class="row" style="justify-content:space-between"><span class="soft" style="letter-spacing:1px">FRENCH QUARTER</span><button class="btn white sm" id="gboard" data-a="gBoard">${G.board?"Follow Tokyo":"Full board"}</button></div>
    <canvas id="gcan" class="gcan" aria-label="Detective Tokyo game. Drag to walk, or use the arrow keys and the space bar."></canvas>
    <div><button class="btn red" id="gact" data-a="gAct" style="width:100%" disabled>Walk up to a wall or a stranger</button></div>
-   <p class="soft">Drag on the street to walk. Red arrows point to hate posters, blue ones to strangers. Watch for the five haters walking up to post.</p>`;
+   <p class="soft">Drag the left side of the screen to walk and the right side to look around. On the little map, red dots are hate posters and blue dots are strangers.</p>`;
   const d=S.me.day, next=[250,500,1000,5000].find(c=>c>S.me.pts)||5000, L=G.last;
   return `<div class="row" style="justify-content:space-between"><h1 style="transform:rotate(-2deg)">Detective Tokyo</h1><span class="stamp pinkc">Members</span></div>
    <div class="sk stack" style="--bg:#fff3c9;transform:rotate(-1.5deg)"><div class="row" style="justify-content:space-between;align-items:flex-end"><div><span class="soft">Your points</span><b style="font-family:var(--display);font-weight:400;font-size:44px;display:block;line-height:1">${num(S.me.pts)}</b></div><span class="soft">${num(S.me.intel)} intel fed to the streets</span></div>
@@ -830,7 +838,7 @@ const A={
  prodDel:async d=>{await api("owner/productDel",{id:+d.id});await refresh();toast("Product deleted")},
  shipped:async d=>{await api("owner/shipped",{id:+d.id});await refresh()},
  saveSocial:async()=>{const b={};for(const k of ["YouTube","Instagram","TikTok","Facebook"])b[k]=$("#soc"+k).value.trim();await api("owner/social",b);await refresh();toast("Links saved")},
- gStart:()=>gStart(), gAct:()=>gAct(), gBoard:(d,el)=>{G.board=!G.board;el.textContent=G.board?"Follow Tokyo":"Full board"},
+ gStart:()=>gStart(), gAct:()=>gAct(),
  redeem:async d=>{await api("redeem",{r:d.r});await refresh();toast(d.r==="sub"?"Done. Your next month is $"+HALF+".":"Reward saved. Pick it at checkout.")}
 };
 document.addEventListener("click",e=>{
