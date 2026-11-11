@@ -368,7 +368,7 @@ async function state(ctx) {
     updates: await all("SELECT subj, msg, ts FROM updates ORDER BY ts DESC LIMIT 30"),
     live: kv("live") || { on: false }, social: kv("social") || {},
     counts: { list: (await one("SELECT COUNT(*)::int AS n FROM subs_free")).n, members: (await one("SELECT COUNT(*)::int AS n FROM users WHERE paid=1")).n },
-    payments: !!KEY, price: PRICE, ship: SHIP, reasons: REASONS,
+    payments: !!KEY, price: PRICE, ship: SHIP, reasons: REASONS, storeOpen: !!kv("store_open"),
   };
 }
 function lastDays(n) { const out = []; for (let i = n - 1; i >= 0; i--) out.push(dayOf(Date.now() - i * DAY)); return [...new Set(out)]; }
@@ -489,6 +489,7 @@ const act = {
   },
   async checkout(ctx, b) {
     limit(ctx.ip, "pay", 10);
+    if (!kv("store_open")) throw new Err(403, "The store isn't open yet. Check back soon.");
     const u = ctx.user, items = (Array.isArray(b.items) ? b.items : []).slice(0, 20), lines = [], meta = []; let sub = 0, shirtMax = 0;
     for (const it of items) {
       const p = await one("SELECT * FROM products WHERE id=?", Math.floor(Number(it.id)) || 0), q = Math.max(1, Math.min(10, Math.floor(Number(it.q) || 1)));
@@ -592,6 +593,7 @@ const own = {
     await run("INSERT INTO products(name,cents,img,shirt,sizes,ts) VALUES(?,?,?,?,?,?)", name, cents, safeFile(b.img) ? b.img : null, b.shirt ? 1 : 0, sizes, Date.now()); return { ok: true };
   },
   async productDel(ctx, b) { const p = await one("SELECT img FROM products WHERE id=?", int(b.id)); if (p) dropFile(p.img); await run("DELETE FROM products WHERE id=?", int(b.id)); return { ok: true }; },
+  async store(ctx, b) { await setkv("store_open", !!b.open); return { ok: true }; },
   async shipped(ctx, b) { await run("UPDATE orders SET shipped=1-shipped WHERE id=?", int(b.id)); return { ok: true }; },
 };
 

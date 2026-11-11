@@ -153,14 +153,14 @@ function cartCalc(){
   return {items,sub,ship,off,c,total:Math.max(0,sub-off)+ship}}
 function renderMerch(){
   const count=cart.filter(i=>prod(i.id)).reduce((a,b)=>a+b.q,0);
-  if(!S.products.length)return `<h1 style="transform:rotate(-2deg)">Merch</h1><div class="soonwrap"><span class="soon">Coming Soon</span></div><div class="stage"><div><h2>Merch is on the way</h2><p style="margin-top:8px">Members get 15% off everything when it drops.</p></div></div>`;
-  return `<h1 style="transform:rotate(-2deg)">Merch</h1><div class="soonwrap"><span class="soon">Coming Soon</span></div>
+  if(!S.products.length)return `<h1 style="transform:rotate(-2deg)">Merch</h1>${S.storeOpen?"":'<div class="soonwrap"><span class="soon">Coming Soon</span></div>'}<div class="stage"><div><h2>Merch is on the way</h2><p style="margin-top:8px">Members get 15% off everything when it drops.</p></div></div>`;
+  return `<h1 style="transform:rotate(-2deg)">Merch</h1>${S.storeOpen?"":'<div class="soonwrap"><span class="soon">Coming Soon</span></div>'}
    <p class="note">${paid()?"Member price is on. You're saving 15% on everything.":`Members save 15% on everything. <a href="#join">Join for ${money(S.price)}</a>`}</p>
    <div class="grid2">${S.products.map(p=>{const sizes=(p.sizes||"").split(",").filter(Boolean);return `<div class="prod sk"><div class="swatch ${p.img?"photo":""}" style="--c:#fff">${p.img?`<img src="/media/${esc(p.img)}" alt="${esc(p.name)}" loading="lazy">`:`<img src="/img/badge.png" alt="">`}</div><h3>${esc(p.name)}</h3>
      <p>${paid()?`<s class="soft">${money(p.cents)}</s> `:""}<b>${money(priceFor(p))}</b></p>
-     ${sizes.length?`<select id="size${p.id}" aria-label="Size for ${esc(p.name)}">${sizes.map(s=>`<option>${esc(s)}</option>`).join("")}</select>`:""}
-     <button class="btn sm" data-a="add" data-id="${p.id}" style="margin-top:8px">Add to cart</button></div>`}).join("")}</div>
-   ${count?`<div class="cartbar sk" style="--bg:var(--yellow)"><div class="row" style="justify-content:space-between"><b>${count} in cart · ${money(cartCalc().sub)}</b><button class="btn white sm" data-a="cart">Check out</button></div></div>`:""}`;
+     ${S.storeOpen?`${sizes.length?`<select id="size${p.id}" aria-label="Size for ${esc(p.name)}">${sizes.map(s=>`<option>${esc(s)}</option>`).join("")}</select>`:""}
+     <button class="btn sm" data-a="add" data-id="${p.id}" style="margin-top:8px">Add to cart</button>`:'<p class="soft" style="margin-top:6px">Coming soon</p>'}</div>`}).join("")}</div>
+   ${count&&S.storeOpen?`<div class="cartbar sk" style="--bg:var(--yellow)"><div class="row" style="justify-content:space-between"><b>${count} in cart · ${money(cartCalc().sub)}</b><button class="btn white sm" data-a="cart">Check out</button></div></div>`:""}`;
 }
 
 /* ---------- join ---------- */
@@ -656,7 +656,10 @@ function studioAds(){
     <div><button class="btn" data-a="adSave">Run this ad</button></div></div>`;
 }
 function studioMerch(){
-  return `<div class="sk stack" style="transform:rotate(1deg)"><h3>Products</h3><div class="tblwrap"><table>${S.products.map(p=>`<tr><td>${esc(p.name)}<div class="soft">${money(p.cents)}${p.sizes?" · "+esc(p.sizes):""}${p.shirt?" · counts as a shirt":""}</div></td><td class="n"><button class="btn white sm" data-a="prodDel" data-id="${p.id}">Delete</button></td></tr>`).join("")||'<tr><td class="soft">No products yet. The store shows "on the way" until you add one.</td></tr>'}</table></div></div>
+  return `<div class="sk stack" style="--bg:${S.storeOpen?"#e3f6e8":"#ffe1e1"};transform:rotate(-1deg)"><h2>${S.storeOpen?"The store is open":"The store is closed"}</h2>
+    <p>${S.storeOpen?"Fans can add to cart and pay.":'Fans see a "Coming Soon" label and the products, but nothing can be bought.'}</p>
+    <div><button class="btn ${S.storeOpen?"white sm":"red"}" data-a="storeToggle">${S.storeOpen?"Close the store":"Open the store for sales"}</button></div></div>
+   <div class="sk stack" style="transform:rotate(1deg)"><h3>Products</h3><div class="tblwrap"><table>${S.products.map(p=>`<tr><td>${esc(p.name)}<div class="soft">${money(p.cents)}${p.sizes?" · "+esc(p.sizes):""}${p.shirt?" · counts as a shirt":""}</div></td><td class="n"><button class="btn white sm" data-a="prodDel" data-id="${p.id}">Delete</button></td></tr>`).join("")||'<tr><td class="soft">No products yet. The store shows "on the way" until you add one.</td></tr>'}</table></div></div>
    <div class="sk stack" style="--bg:#fff7d6;transform:rotate(-1deg)"><h2>New product</h2>
     <div><label for="pdName">Name</label><input type="text" id="pdName" maxlength="60"></div>
     <div><label for="pdPrice">Price in dollars</label><input type="number" id="pdPrice" min="1" step="0.01" inputmode="decimal" placeholder="32"></div>
@@ -772,7 +775,7 @@ const A={
  repRemove:async d=>{await api("owner/repRemove",{id:+d.id});await refresh();toast("Post taken down")},
  chat:async()=>{const i=$("#chatIn"),t=i.value.trim();if(!t)return;i.value="";await api("chat",{text:t});pollChat();i.focus()},
  chatDel:async d=>{await api("owner/chatDel",{id:+d.id});pollChat()},
- add:(d,el)=>{const id=+d.id,sel=$("#size"+id),size=sel?sel.value:"",f=cart.find(i=>i.id===id&&i.size===size);if(f)f.q=Math.min(10,f.q+1);else cart.push({id,size,q:1});saveCart();burst(el,"+1");render()},
+ add:(d,el)=>{if(!S.storeOpen)return toast("The store isn't open yet");const id=+d.id,sel=$("#size"+id),size=sel?sel.value:"",f=cart.find(i=>i.id===id&&i.size===size);if(f)f.q=Math.min(10,f.q+1);else cart.push({id,size,q:1});saveCart();burst(el,"+1");render()},
  cart:()=>{const k=cartCalc(),rows=k.items.map((i,n)=>`<tr><td>${esc(i.p.name)}${i.size?" ("+esc(i.size)+")":""} × ${i.q}</td><td class="n">${money(priceFor(i.p)*i.q)}</td><td class="n"><button class="btn white sm" data-a="rm" data-n="${n}">Remove</button></td></tr>`).join("");
    openModal(`<div class="stack"><h2>Your cart</h2><table>${rows}
     <tr><td>Subtotal${paid()?" (member price)":""}</td><td class="n">${money(k.sub)}</td><td></td></tr>
@@ -823,6 +826,7 @@ const A={
  prodSave:async(d,el)=>{const b={name:$("#pdName").value.trim(),price:parseFloat($("#pdPrice").value),sizes:$("#pdSizes").value,shirt:$("#pdShirt").checked};
    if(!b.name)return toast("Give the product a name");if(!(b.price>=1))return toast("Set a price of $1 or more");
    el.disabled=true;try{b.img=await uploadPic($("#pdImg"),1000);await api("owner/product",b);await refresh();toast("Added to the store")}finally{el.disabled=false}},
+ storeToggle:async()=>{await api("owner/store",{open:!S.storeOpen});await refresh();toast(S.storeOpen?"The store is open":"The store is closed")},
  prodDel:async d=>{await api("owner/productDel",{id:+d.id});await refresh();toast("Product deleted")},
  shipped:async d=>{await api("owner/shipped",{id:+d.id});await refresh()},
  saveSocial:async()=>{const b={};for(const k of ["YouTube","Instagram","TikTok","Facebook"])b[k]=$("#soc"+k).value.trim();await api("owner/social",b);await refresh();toast("Links saved")},
