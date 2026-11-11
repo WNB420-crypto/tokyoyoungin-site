@@ -153,8 +153,8 @@ function cartCalc(){
   return {items,sub,ship,off,c,total:Math.max(0,sub-off)+ship}}
 function renderMerch(){
   const count=cart.filter(i=>prod(i.id)).reduce((a,b)=>a+b.q,0);
-  if(!S.products.length)return `<h1 style="transform:rotate(-2deg)">Merch</h1><div class="stage"><div><h2>Merch is on the way</h2><p style="margin-top:8px">Members get 15% off everything when it drops.</p></div></div>`;
-  return `<h1 style="transform:rotate(-2deg)">Merch</h1>
+  if(!S.products.length)return `<h1 style="transform:rotate(-2deg)">Merch</h1><div class="soonwrap"><span class="soon">Coming Soon</span></div><div class="stage"><div><h2>Merch is on the way</h2><p style="margin-top:8px">Members get 15% off everything when it drops.</p></div></div>`;
+  return `<h1 style="transform:rotate(-2deg)">Merch</h1><div class="soonwrap"><span class="soon">Coming Soon</span></div>
    <p class="note">${paid()?"Member price is on. You're saving 15% on everything.":`Members save 15% on everything. <a href="#join">Join for ${money(S.price)}</a>`}</p>
    <div class="grid2">${S.products.map(p=>{const sizes=(p.sizes||"").split(",").filter(Boolean);return `<div class="prod sk"><div class="swatch ${p.img?"photo":""}" style="--c:#fff">${p.img?`<img src="/media/${esc(p.img)}" alt="${esc(p.name)}" loading="lazy">`:`<img src="/img/badge.png" alt="">`}</div><h3>${esc(p.name)}</h3>
      <p>${paid()?`<s class="soft">${money(p.cents)}</s> `:""}<b>${money(priceFor(p))}</b></p>
