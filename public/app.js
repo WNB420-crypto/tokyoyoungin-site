@@ -684,10 +684,22 @@ function studioPoints(){
    ${earnHtml()}
    <div class="sk stack flat"><h3>All members</h3><p>${num(ST.points.earned)} points earned · ${num(ST.points.spent)} spent · ${ST.unused} unused reward${ST.unused===1?"":"s"}</p></div>`;
 }
+function igCard(){
+  const g=ST.ig||{on:false};
+  if(g.on)return `<div class="sk stack" style="transform:rotate(.8deg)"><h2>Instagram auto-post</h2>
+   <p><b>On</b>${g.username?` for @${esc(g.username)}`:""}. Every new Instagram upload shows up in the feed within about 5 minutes, with likes, dislikes, tips and reports like any other post.</p>
+   <p class="soft">${num(g.made)} brought over so far · last checked ${g.lastOk?new Date(g.lastOk).toLocaleString():"not yet"}</p>
+   ${g.lastErr?`<p style="color:#c8102e"><b>Instagram is not answering:</b> ${esc(g.lastErr)}. If this stays, paste a fresh access token.</p>`:""}
+   <div class="row"><button class="btn" data-a="igCheck">Check now</button><button class="btn white" data-a="igOff">Turn off</button></div></div>`;
+  return `<div class="sk stack" style="transform:rotate(.8deg)"><h2>Instagram auto-post</h2>
+   <p class="soft">Turn every new Instagram upload into a post here. Paste the access token for the Instagram account from the Meta developer page. Only uploads made after you connect come over.</p>
+   <div><label for="igTok">Instagram access token</label><input type="password" class="pw" id="igTok" autocomplete="off" placeholder="IGAA..."></div>
+   <div><button class="btn" data-a="igConnect">Connect Instagram</button></div></div>`;
+}
 function studioLinks(){
   return `<div class="sk stack" style="transform:rotate(-1deg)"><h2>Social links</h2><p class="soft">These show as buttons on the profile.</p>
    ${["YouTube","Instagram","TikTok","Facebook"].map(k=>`<div><label for="soc${k}">${k}</label><input type="url" id="soc${k}" value="${esc((S.social||{})[k]||"")}" placeholder="https://"></div>`).join("")}
-   <div><button class="btn" data-a="saveSocial">Save links</button></div></div>${loginForm(false)}`;
+   <div><button class="btn" data-a="saveSocial">Save links</button></div></div>${igCard()}${loginForm(false)}`;
 }
 function loginForm(first){
   return `<div class="sk stack" style="--bg:#fff3c9;transform:rotate(-1deg)"><h2>${first?"Make this login yours":"Your login"}</h2>
@@ -829,6 +841,9 @@ const A={
  storeToggle:async()=>{await api("owner/store",{open:!S.storeOpen});await refresh();toast(S.storeOpen?"The store is open":"The store is closed")},
  prodDel:async d=>{await api("owner/productDel",{id:+d.id});await refresh();toast("Product deleted")},
  shipped:async d=>{await api("owner/shipped",{id:+d.id});await refresh()},
+ igConnect:async()=>{const token=$("#igTok").value.trim();if(!token)return toast("Paste the access token first");await api("owner/igConnect",{token});await refresh();toast("Instagram connected")},
+ igOff:async()=>{await api("owner/igOff",{});await refresh();toast("Instagram auto-post is off")},
+ igCheck:async()=>{const r=await api("owner/igCheck",{});await refresh();toast(r.made?r.made+" new post"+(r.made===1?"":"s")+" brought over":"Nothing new on Instagram")},
  saveSocial:async()=>{const b={};for(const k of ["YouTube","Instagram","TikTok","Facebook"])b[k]=$("#soc"+k).value.trim();await api("owner/social",b);await refresh();toast("Links saved")},
  gStart:()=>gStart(), gAct:()=>gAct(), gBoard:(d,el)=>{G.board=!G.board;el.textContent=G.board?"Follow Tokyo":"Full board"},
  redeem:async d=>{await api("redeem",{r:d.r});await refresh();toast(d.r==="sub"?"Done. Your next month is $"+HALF+".":"Reward saved. Pick it at checkout.")}

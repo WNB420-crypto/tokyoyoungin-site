@@ -386,7 +386,7 @@ async function studio() {
     ads: await all("SELECT * FROM ads ORDER BY id DESC"),
     orders: (await all("SELECT id, email, items, cents, ship, ts, shipped FROM orders ORDER BY ts DESC LIMIT 200")).map(o => ({ ...o, items: JSON.parse(o.items || "[]"), ship: JSON.parse(o.ship || "null") })),
     points: await one("SELECT COALESCE(SUM(earned),0)::int AS earned, COALESCE(SUM(spent),0)::int AS spent FROM users"),
-    unused: (await one("SELECT COUNT(*)::int AS n FROM coupons WHERE uses>0")).n, webhook: !!whSecret(),
+    unused: (await one("SELECT COUNT(*)::int AS n FROM coupons WHERE uses>0")).n, webhook: !!whSecret(), ig: igStatus(),
   };
 }
 
@@ -557,7 +557,52 @@ const colors = ["#fdb913", "#ffd9ec", "#dfe9ff", "#d9fff8", "#ffe9a8"];
 const safeFile = f => /^[a-f0-9]{24}\.[a-z0-9]{2,5}$/.test(f || "") && fs.existsSync(path.join(UP, f));
 const dropFile = f => { if (f && /^[a-f0-9]{24}\.[a-z0-9]{2,5}$/.test(f)) fs.unlink(path.join(UP, f), () => {}); };
 const int = v => Math.floor(Number(v)) || 0;
+// ---- Instagram auto-post: new uploads on the connected account become posts here ----
+const IG_API = (process.env.IG_API || "https://graph.instagram.com").replace(/\/$/, "");
+async function igGet(path, q) {
+  const r = await fetch(IG_API + path + "?" + new URLSearchParams(q), { signal: AbortSignal.timeout(15000) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || j.error) throw new Error((j.error && (j.error.message || j.error.type)) || "Instagram said no (" + r.status + ")");
+  return j;
+}
+function igTitle(cap) { const l = String(cap || "").split("\n").map(s => s.trim()).find(Boolean) || ""; return l ? (l.length > 90 ? l.slice(0, 87).trimEnd() + "..." : l) : "New on Instagram"; }
+let igBusy = false;
+async function igSync() {
+  const g = kv("ig"); if (!g || !g.token || igBusy) return 0; igBusy = true;
+  let made = 0;
+  try {
+    if (Date.now() - (g.fresh || g.since) > 7 * DAY) {
+      try { const t = await igGet("/refresh_access_token", { grant_type: "ig_refresh_token", access_token: g.token }); if (t.access_token) { g.token = t.access_token; g.exp = Date.now() + (Number(t.expires_in) || 60 * 86400) * 1000; } } catch (e) {}
+      g.fresh = Date.now();
+    }
+    const j = await igGet("/me/media", { fields: "id,caption,media_type,permalink,timestamp", limit: "25", access_token: g.token });
+    const seen = kv("ig_seen") || [];
+    const fresh = (j.data || []).filter(m => m && m.id && m.permalink && /^https:\/\/(www\.)?instagram\.com\/(p|reel|tv)\/[\w-]+/.test(m.permalink) && Date.parse(m.timestamp) > g.since && !seen.includes(String(m.id))).sort((a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp));
+    for (const m of fresh) {
+      const n = (await one("SELECT COUNT(*)::int AS n FROM posts")).n;
+      await run("INSERT INTO posts(id,kind,title,cap,created,tier,media,url,platform,color) VALUES(?,?,?,?,?,?,?,?,?,?)", "p" + rid(6), "embed", igTitle(m.caption), str(m.caption || "", 500), Date.now(), "public", null, m.permalink.split("?")[0], "Instagram", colors[n % colors.length]);
+      seen.push(String(m.id)); made++;
+    }
+    if (made) await setkv("ig_seen", seen.slice(-400));
+    g.lastOk = Date.now(); g.lastErr = ""; g.made = (g.made || 0) + made;
+  } catch (e) { g.lastErr = String(e.message || e).slice(0, 200); console.error("instagram sync:", g.lastErr); }
+  finally { igBusy = false; if (kv("ig")) await setkv("ig", g); }
+  return made;
+}
+function igStatus() { const g = kv("ig"); return g && g.token ? { on: true, username: g.username || "", since: g.since, lastOk: g.lastOk || 0, lastErr: g.lastErr || "", made: g.made || 0, exp: g.exp || 0 } : { on: false }; }
+setInterval(() => igSync().catch(() => {}), 5 * 60000).unref();
+
 const own = {
+  async igConnect(ctx, b) {
+    const token = String((b || {}).token || "").trim();
+    if (token.length < 40 || token.length > 600 || /\s/.test(token)) throw new Err(400, "Paste the whole access token from the Meta developer page.");
+    let me; try { me = await igGet("/me", { fields: "user_id,username", access_token: token }); } catch (e) { throw new Err(400, "Instagram did not accept that token: " + String(e.message || e).slice(0, 140)); }
+    await setkv("ig", { token, username: str(me.username || "", 60), since: Date.now(), exp: Date.now() + 60 * DAY, made: 0 });
+    await igSync();
+    return { ok: true };
+  },
+  async igOff() { await setkv("ig", null); return { ok: true }; },
+  async igCheck() { if (!igStatus().on) throw new Err(400, "Connect Instagram first."); const made = await igSync(); const s = igStatus(); if (s.lastErr) throw new Err(400, "Instagram check failed: " + s.lastErr); return { ok: true, made }; },
   async post(ctx, b) {
     const kind = ["video", "photo", "embed", "text"].includes(b.kind) ? b.kind : "text", title = str(b.title, 90), tier = ["public", "early", "members"].includes(b.tier) ? b.tier : "public";
     if (!title) throw new Err(400, "Give the post a title first.");
