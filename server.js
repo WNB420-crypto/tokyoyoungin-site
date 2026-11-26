@@ -9,7 +9,7 @@ const PUB = path.join(__dirname, "public"), UP = path.join(DATA, "uploads");
 const BASE = (process.env.PUBLIC_URL || (process.env.RAILWAY_PUBLIC_DOMAIN ? "https://" + process.env.RAILWAY_PUBLIC_DOMAIN : "http://localhost:" + PORT)).replace(/\/$/, "");
 const KEY = process.env.STRIPE_SECRET_KEY || "";
 const SECURE = BASE.startsWith("https://");
-const PRICE = 899, HALF_OFF = 400, SHIP = 599, MEMBER_OFF = 0.15, HR = 36e5, DAY = 864e5;
+const PRICE = 199, HALF_OFF = 100, SHIP = 599, MEMBER_OFF = 0.15, HR = 36e5, DAY = 864e5;
 const SHIFTS = 3, SHIFT_CAP = 15, CRED_PER = 4;
 const REWARDS = {
   pct5: { cost: 250, label: "5% off one order", uses: 1 },

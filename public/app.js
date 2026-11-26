@@ -1,5 +1,5 @@
 "use strict";
-const DAY=864e5, HR=36e5, HALF=4.99, MEMBER_OFF=.15, SHIFTS=3, SHIFT_SECS=120, SHIFT_CAP=15, HATE_LIFE=40, CRED_PER=4;
+const DAY=864e5, HR=36e5, HALF=0.99, MEMBER_OFF=.15, SHIFTS=3, SHIFT_SECS=120, SHIFT_CAP=15, HATE_LIFE=40, CRED_PER=4;
 if(window.CanvasRenderingContext2D&&!CanvasRenderingContext2D.prototype.roundRect)CanvasRenderingContext2D.prototype.roundRect=function(x,y,w,h){this.rect(x,y,w,h)};
 const $=s=>document.querySelector(s);
 const esc=s=>String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
